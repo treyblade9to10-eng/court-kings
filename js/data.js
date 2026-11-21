@@ -1,24 +1,9 @@
 // Court Kings - static data: cities, colors, names
 (function (CK) {
   // [abbr, city, primary, secondary, conference]
-  CK.TEAMS = [
-    ['ATL', 'Atlanta', '#e03a3e', '#c1d32f', 'E'], ['BOS', 'Boston', '#007a33', '#ba9653', 'E'],
-    ['BKN', 'Brooklyn', '#1a1a1a', '#bbbbbb', 'E'], ['CHA', 'Charlotte', '#00788c', '#1d1160', 'E'],
-    ['CHI', 'Chicago', '#ce1141', '#111111', 'E'], ['CLE', 'Cleveland', '#860038', '#fdbb30', 'E'],
-    ['DET', 'Detroit', '#c8102e', '#1d42ba', 'E'], ['IND', 'Indiana', '#002d62', '#fdbb30', 'E'],
-    ['MIA', 'Miami', '#98002e', '#f9a01b', 'E'], ['MIL', 'Milwaukee', '#00471b', '#eee1c6', 'E'],
-    ['NYK', 'New York', '#006bb6', '#f58426', 'E'], ['ORL', 'Orlando', '#0077c0', '#c4ced4', 'E'],
-    ['PHI', 'Philadelphia', '#006bb6', '#ed174c', 'E'], ['TOR', 'Toronto', '#ce1141', '#111111', 'E'],
-    ['WAS', 'Washington', '#002b5c', '#e31837', 'E'],
-    ['DAL', 'Dallas', '#00538c', '#b8c4ca', 'W'], ['DEN', 'Denver', '#0e2240', '#fec524', 'W'],
-    ['GSW', 'Golden State', '#1d428a', '#ffc72c', 'W'], ['HOU', 'Houston', '#ce1141', '#c4ced4', 'W'],
-    ['ING', 'Inglewood', '#1d428a', '#c8102e', 'W'], ['LAL', 'Los Angeles', '#552583', '#fdb927', 'W'],
-    ['MEM', 'Memphis', '#5d76a9', '#12173f', 'W'], ['MIN', 'Minnesota', '#0c2340', '#78be20', 'W'],
-    ['NOP', 'New Orleans', '#0c2340', '#c8102e', 'W'], ['OKC', 'Oklahoma City', '#007ac1', '#ef3b24', 'W'],
-    ['PHX', 'Phoenix', '#1d1160', '#e56020', 'W'], ['POR', 'Portland', '#e03a3e', '#111111', 'W'],
-    ['SAC', 'Sacramento', '#5a2d81', '#8a959e', 'W'], ['SAS', 'San Antonio', '#8a959e', '#111111', 'W'],
-    ['UTA', 'Utah', '#4b2a8a', '#111111', 'W']
-  ];
+  // real teams from rosters.js: [abbr, city, primary, secondary, conference, nickname, logo code]
+  CK.TEAMS = CK.REAL.teams.map(t => [t[0], t[1], t[3], t[4], t[5], t[2], t[6]]);
+  CK.logoUrl = code => 'https://a.espncdn.com/i/teamlogos/nba/500/' + code + '.png';
 
   CK.FIRST = ['Jalen', 'Marcus', 'Devin', 'Tyrese', 'Caleb', 'Malik', 'Andre', 'Luka', 'Nikola', 'Darius', 'Jaylen', 'Isaiah', 'Trey', 'Miles', 'Cam', 'Zion', 'Ja', 'Keon', 'Bryce', 'Evan',
     'Tobias', 'Omar', 'Kendrick', 'Desmond', 'Kyle', 'Josh', 'Dejon', 'Amir', 'Rui', 'Yuki', 'Mateo', 'Diego', 'Santi', 'Lars', 'Sven', 'Aleks', 'Bogdan', 'Pascal', 'Theo', 'Hugo',
@@ -47,7 +32,8 @@
   CK.RATING_NAMES = { sht: 'SHOOTING', ins: 'INSIDE', pas: 'HANDLES', def: 'DEFENSE', ath: 'ATHLETIC' };
   CK.RKEYS = ['sht', 'ins', 'pas', 'def', 'ath'];
 
-  CK.CAP = 115;       // salary cap ($M)
-  CK.ROSTER_MAX = 12;
-  CK.ROSTER_MIN = 9;
+  CK.CAP = 165;       // salary cap ($M, real 2026-27)
+  CK.APRON = 210;     // hard ceiling for trades / payroll
+  CK.ROSTER_MAX = 15;
+  CK.ROSTER_MIN = 10;
 })(window.CK);

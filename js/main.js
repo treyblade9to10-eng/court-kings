@@ -1,8 +1,9 @@
 // Court Kings - boot
 (function (CK) {
-  CK.VER = '1.0.0';
+  CK.VER = '2.0.0';
   addEventListener('DOMContentLoaded', () => {
     const game = document.getElementById('game');
+    if (CK.M.touch) game.classList.add('touch');
     CK.IN.bind(game, game.querySelector('canvas'));
     document.getElementById('pauseBtn').addEventListener('click', () => CK.M.pause());
     // stop iOS double-tap zoom and rubber-banding in game

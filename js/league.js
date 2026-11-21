@@ -6,9 +6,9 @@
   // ---------- players ----------
   L.ovr = p => { const w = CK.POS_W[p.pos]; return CK.RKEYS.reduce((s, k, i) => s + p.r[k] * w[i], 0); };
   L.stars = p => U.clamp(Math.round(L.ovr(p)) / 2, 0.5, 5);
-  L.salaryFor = p => { const o = L.ovr(p); let s = Math.max(1.2, 0.95 * Math.pow(Math.max(0, o - 3.4), 2) + 1); if (p.age >= 32) s *= 0.8; if (p.age <= 22) s *= 0.85; return Math.round(s * 10) / 10; };
+  L.salaryFor = p => { const o = L.ovr(p); let s = Math.max(1.2, 0.95 * Math.pow(Math.max(0, o - 3.4), 2) + 1); if (p.age >= 32) s *= 0.8; if (p.age <= 22) s *= 0.85; return Math.round(s * 14.5) / 10; };
   L.name = p => p.fn + ' ' + p.ln;
-  L.short = p => p.fn[0] + '. ' + p.ln;
+  L.short = p => (p.fn ? p.fn[0] + '. ' : '') + p.ln;
 
   L.newPlayer = (pos, level, age) => {
     const tpl = CK.POS_TPL[pos], r = {};
@@ -53,7 +53,7 @@
     const b = bench.slice(0, 3).reduce((a, p) => a + L.ovr(p), 0) / Math.max(1, Math.min(3, bench.length));
     return s * 0.78 + (b || s - 2) * 0.22;
   };
-  L.teamStars = t => U.clamp(Math.round((L.teamOvr(t) - 2.5) * 2 / 1.2) / 2, 0.5, 5);
+  L.teamStars = t => U.clamp(Math.round((1.5 + (L.teamOvr(t) - 5.3) * 2.7) * 2) / 2, 0.5, 5);
   L.offRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.sht * 0.45 + p.r.ins * 0.3 + p.r.pas * 0.15 + p.r.ath * 0.1, 0) / 5; };
   L.defRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.def * 0.65 + p.r.ath * 0.25 + (p.ht - 78) * 0.08, 0) / 5; };
 
@@ -66,9 +66,25 @@
       draft: null, fa: [], log: [], deadline: false, totW: 0, totL: 0, picks: {}, sfx: true, lastRes: null
     };
     const levels = U.shuffle(Array.from({ length: 30 }, (_, i) => 4.6 + i * 0.075));
+    const real = opts.real !== false;
+    const byTeam = {};
+    if (real) CK.REAL.players.forEach(a => {
+      const [n, tm, pos, age, ht, num, sht, ins, pas, def, ath, pot, sal, yrs, skin, hair, out] = a;
+      const sp = n.indexOf(' ');
+      const p = { id: U.uid(), fn: sp > 0 ? n.slice(0, sp) : '', ln: sp > 0 ? n.slice(sp + 1) : n, pos, age, ht, num, skin, hair, hc: hair === 5 ? 0 : (skin >= 3 ? 0 : U.irand(0, 3)),
+        r: { sht, ins, pas, def, ath }, pot, sal, yrs, morale: U.irand(60, 85), inj: out ? U.irand(2, 8) : 0, st: L.blankStats(), car: L.blankStats(), seasons: 1, tm: -1, real: true };
+      (byTeam[tm] = byTeam[tm] || []).push(p);
+    });
+    S.real = real;
     CK.TEAMS.forEach((d, i) => {
-      const t = { id: i, ab: d[0], city: d[1], c1: d[2], c2: d[3], conf: d[4], roster: [], start: [], w: 0, l: 0, pf: 0, pa: 0, strk: 0 };
+      const t = { id: i, ab: d[0], city: d[1], c1: d[2], c2: d[3], conf: d[4], name: d[5], logo: d[6], roster: [], start: [], w: 0, l: 0, pf: 0, pa: 0, strk: 0 };
       const lv = levels[i];
+      if (real) {
+        const ps = (byTeam[t.ab] || []).sort((a, b) => L.ovr(b) - L.ovr(a));
+        ps.forEach((p, k) => { S.players[p.id] = p; if (k < 14) { p.tm = i; t.roster.push(p.id); } else { p.tm = -2; S.fa.push(p.id); } });
+        while (t.roster.length < 12) { const p = L.newPlayer(U.pick(CK.POS), U.rand(2.5, 4)); p.tm = i; S.players[p.id] = p; t.roster.push(p.id); }
+        L.uniqueNums(t); L.autoStarters(t); S.teams.push(t); return;
+      }
       const plan = ['PG', 'SG', 'SF', 'PF', 'C', 'PG', 'SG', 'SF', 'PF', 'C', U.pick(CK.POS)];
       plan.forEach((pos, k) => {
         const level = k < 5 ? lv + U.rand(-0.6, 0.9) + (k === 0 || k === 2 ? 0.4 : 0) : lv - U.rand(1.2, 2.4);
@@ -85,8 +101,8 @@
     L.inbox('Welcome to ' + L.myTeam().city, 'The owner hired you to bring a title to ' + L.myTeam().city + '. Win games to earn Coach Credits, keep the fans happy, and do not let the owner lose faith.');
     return S;
   };
-  L.uniqueNums = t => { const used = new Set(); L.roster(t).forEach(p => { while (used.has(p.num)) p.num = U.irand(0, 45); used.add(p.num); }); };
-  L.fitCaps = () => { CK.S.teams.forEach(t => { let pay = L.payroll(t); if (pay > CK.CAP * 0.98) { const f = CK.CAP * 0.95 / pay; L.roster(t).forEach(p => p.sal = Math.max(1, Math.round(p.sal * f * 10) / 10)); } }); };
+  L.uniqueNums = t => { const used = new Set(); L.roster(t).sort((a, b) => (b.real ? 1 : 0) - (a.real ? 1 : 0)).forEach(p => { while (used.has(p.num)) p.num = U.irand(0, 45); used.add(p.num); }); };
+  L.fitCaps = () => { CK.S.teams.forEach(t => { let pay = L.payroll(t); if (pay > CK.APRON) { const f = CK.APRON * 0.97 / pay; L.roster(t).forEach(p => p.sal = Math.max(1, Math.round(p.sal * f * 10) / 10)); } }); };
   L.myTeam = () => CK.S.teams[CK.S.me];
   L.T = id => CK.S.teams[id];
 
@@ -116,8 +132,8 @@
     const S = CK.S;
     const rh = L.teamOvr(h) + 0.25, ra = L.teamOvr(a);
     const oh = L.offRating(h) - L.defRating(a), oa = L.offRating(a) - L.defRating(h);
-    let hs = Math.round(110 + (rh - ra) * 5 + oh * 1.4 + U.gauss() * 10);
-    let as = Math.round(110 + (ra - rh) * 5 + oa * 1.4 + U.gauss() * 10);
+    let hs = Math.round(110 + (rh - ra) * 9 + oh * 1.4 + U.gauss() * 10);
+    let as = Math.round(110 + (ra - rh) * 9 + oa * 1.4 + U.gauss() * 10);
     while (hs === as) { hs += U.irand(0, 10); as += U.irand(0, 10); }
     return [U.clamp(hs, 72, 155), U.clamp(as, 72, 155)];
   };
@@ -228,5 +244,13 @@
   // ---------- inbox / news ----------
   L.inbox = (title, body, choices) => { CK.S.inbox.unshift({ id: U.uid(), title, body, choices: choices || null, read: false, season: CK.S.season, rnd: CK.S.round }); CK.S.inbox = CK.S.inbox.slice(0, 40); };
   L.save = () => U.save('ck_save_v1', CK.S);
-  L.load = () => { const s = U.load('ck_save_v1', null); if (s && s.v === 1) { CK.S = s; return true; } return false; };
+  L.load = () => { const s = U.load('ck_save_v1', null); if (s && s.v === 1) { CK.S = s; L.migrate(s); return true; } return false; };
+  // v1 saves had made-up team names: attach real names/logos and scale salaries to the new cap
+  L.migrate = s => {
+    if (s.mig2) return;
+    const map = { GSW: 'GS', NOP: 'NO', NYK: 'NY', SAS: 'SA', UTA: 'UTAH', WAS: 'WSH', ING: 'LAC' };
+    s.teams.forEach(t => { const ab = map[t.ab] || t.ab, d = CK.TEAMS.find(x => x[0] === ab); if (d) { t.ab = d[0]; t.city = d[1]; t.c1 = d[2]; t.c2 = d[3]; t.name = d[5]; t.logo = d[6]; } });
+    Object.values(s.players).forEach(p => { p.sal = Math.round(p.sal * 14.5) / 10; });
+    s.mig2 = true;
+  };
 })(window.CK);

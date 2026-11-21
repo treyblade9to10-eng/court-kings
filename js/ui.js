@@ -12,7 +12,9 @@
   UI.stars = n => { let s = '<span class="stars">'; for (let i = 1; i <= 5; i++) s += n >= i ? STAR : n >= i - 0.5 ? HALF : EMPTY; return s + '</span>'; };
   const pips = (v, col) => { let s = '<span class="pips">'; for (let i = 1; i <= 10; i++) s += '<i class="' + (i <= v ? 'on' : '') + '"' + (i <= v && col ? ' style="background:' + col + '"' : '') + '></i>'; return s + '</span>'; };
   const bar = (v, col) => '<span class="bar"><i style="width:' + v + '%;background:' + col + '"></i></span>';
-  const teamTag = t => '<span class="tt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + t.ab + '</span>';
+  UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : '<img class="lg ' + (cls || '') + '" src="' + CK.logoUrl(t.logo) + '" alt="" loading="lazy" onerror="this.remove()">';
+  const teamTag = t => '<span class="tt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'sm') + t.ab + '</span>';
+  const bigTeam = t => '<div class="bigt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + (UI.logo(t, 'big') || '<b class="ab">' + t.ab + '</b>') + '<span>' + U.esc(t.city.toUpperCase()) + '</span><b>' + U.esc((t.name || t.ab).toUpperCase()) + '</b></div>';
   const rec = t => t.w + '-' + t.l;
   const pcache = {};
   UI.portrait = (p, t, size) => {
@@ -41,39 +43,45 @@
   UI.title = () => {
     const has = L.load();
     if (has) CK.SFX.on = CK.S.sfx !== false;
-    app().innerHTML = '<div class="title">' +
-      '<canvas id="tcv" width="216" height="140"></canvas>' +
-      '<h1><span>COURT</span><span>KINGS</span></h1><div class="tag">RETRO HOOPS DYNASTY</div>' +
+    app().innerHTML = '<div class="title"><canvas id="tcv" width="400" height="225"></canvas><div class="tbox"><div class="tleft">' +
+      '<h1><span>COURT</span><span>KINGS</span></h1><div class="tag">RETRO HOOPS DYNASTY</div></div><div class="tright">' +
       (has ? '<button class="btn" id="cont">CONTINUE<small>' + U.esc(L.myTeam().city) + ' ' + rec(L.myTeam()) + ' / ' + CK.S.season + '</small></button>' : '') +
       '<button class="btn ' + (has ? 'alt' : '') + '" id="newc">NEW CAREER</button>' +
       '<button class="btn alt" id="how">HOW TO PLAY</button>' +
-      '<div class="foot">v' + CK.VER + '</div></div>';
+      '<div class="foot">v' + CK.VER + '</div></div></div></div>';
     titleAnim();
     if (has) click('#cont', () => UI.hub('home'));
     click('#newc', () => { if (has && !confirm('Start over? Your current career will be erased.')) return; UI.newCareer(); });
     click('#how', UI.howTo);
   };
+  // attract mode: two real teams play each other behind the title
   function titleAnim() {
-    const c = $('#tcv'); if (!c) return; const g = c.getContext('2d'); let t = 0;
-    const ball = { x: 30, y: 30, vx: 70, vy: 0 };
-    const tick = () => {
-      if (!document.body.contains(c)) return;
-      t += 1 / 60; g.fillStyle = '#0b0d1a'; g.fillRect(0, 0, 216, 140);
-      // floor
-      for (let x = 0; x < 216; x += 2) for (let y = 104; y < 140; y++) { g.fillStyle = ((x >> 3) + (y >> 2)) % 3 ? '#c98a4e' : '#b97c45'; g.fillRect(x, y, 2, 1); }
-      g.fillStyle = '#f4efe6'; g.fillRect(0, 104, 216, 1);
-      // hoop
-      g.fillStyle = '#2a2f45'; g.fillRect(186, 30, 3, 74); g.fillStyle = 'rgba(220,240,255,.6)'; g.fillRect(176, 22, 4, 26); g.fillStyle = '#ef4a1a'; g.fillRect(162, 42, 15, 2);
-      g.fillStyle = '#fff'; for (let i = 0; i < 6; i++) for (let x = 0; x < 12 - i; x += 2) g.fillRect(164 + x + (i % 2) + (i >> 1), 44 + i, 1, 1);
-      // ball arcs toward hoop and loops
-      ball.vy += 260 / 60; ball.x += ball.vx / 60; ball.y += ball.vy / 60;
-      if (ball.y > 98) { ball.y = 98; ball.vy = -170; }
-      if (ball.x > 168) { ball.x = 20; ball.y = 70; ball.vy = -150; }
-      g.fillStyle = '#1b0f05'; g.fillRect(ball.x - 3, ball.y - 3, 7, 7); g.fillStyle = '#ef7d2a'; g.fillRect(ball.x - 2, ball.y - 2, 5, 5); g.fillStyle = '#ffb067'; g.fillRect(ball.x - 2, ball.y - 2, 2, 2);
-      g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(ball.x - 3, 108, 7, 2);
+    const c = $('#tcv'); if (!c) return; const g = c.getContext('2d');
+    const E = CK.CT;
+    const team = d => ({ ab: d[0], city: d[1], c1: d[2], c2: d[3], name: d[5], logo: d[6] });
+    const five = ab => {
+      const ps = CK.REAL.players.filter(a => a[1] === ab).map(a => ({ id: 't' + a[0], fn: '', ln: a[0].split(' ').slice(1).join(' ') || a[0], pos: a[2], ht: a[4], num: a[5], r: { sht: a[6], ins: a[7], pas: a[8], def: a[9], ath: a[10] }, skin: a[14], hair: a[15], hc: a[15] === 5 ? 0 : 0 }));
+      ps.sort((x, y) => CK.L.ovr(y) - CK.L.ovr(x));
+      const out = []; CK.POS.forEach(pos => { const p = ps.find(x => x.pos === pos && !out.includes(x)); if (p) out.push(p); });
+      for (const p of ps) { if (out.length >= 5) break; if (!out.includes(p)) out.push(p); }
+      return out.sort((a, b) => CK.POS.indexOf(a.pos) - CK.POS.indexOf(b.pos));
+    };
+    let home, away;
+    const newGame = () => {
+      const ts = U.shuffle(CK.TEAMS.slice()); home = team(ts[0]); away = team(ts[1]);
+      CK.RD.buildCourt(home, away);
+      E.start({ off: Object.assign({ players: five(away.ab) }, CK.M.jersey(away, false)), def: Object.assign({ players: five(home.ab) }, CK.M.jersey(home, true)), user: 'watch', diff: 1, onEnd: () => setTimeout(() => { if (document.body.contains(c)) newGame(); }, 200) });
+      E.st.user = null;
+    };
+    newGame();
+    let last = performance.now();
+    const tick = now => {
+      if (!document.body.contains(c) || CK.inGame) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (E.st && E.st.cfg.user === 'watch') { E.update(dt); CK.RD.draw(g, { hype: 0.3 }); }
       requestAnimationFrame(tick);
     };
-    tick();
+    requestAnimationFrame(tick);
   }
   UI.howTo = () => UI.modal('<h2>HOW TO PLAY</h2><div class="how">' +
     '<p><b>You are the coach.</b> Pick a team, win games, earn Coach Credits (CC), and build a dynasty.</p>' +
@@ -81,7 +89,7 @@
     '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. MOVE is a crossover that can break ankles. Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
     '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters (time it with their shot). STEAL pokes at the ball, but you can foul.</p>' +
     '<p><b>Hit 3 in a row</b> with the same player and he catches fire.</p>' +
-    '<p><b>Keyboard:</b> WASD or arrows move, Space shoot, K pass, L move/steal, P pause.</p>' +
+    '<p><b>Keyboard (computer):</b> WASD or arrows move, Space shoot/contest, K pass to the open man, 1-5 pass to a teammate, L crossover/steal, P pause.</p><p><b>Bigs set screens</b> on your defender. Use the pick, then hit the big rolling to the rim.</p><p><b>Phone:</b> play it sideways.</p>' +
     '<p><b>Front office:</b> spend CC to train players and upgrade facilities. Keep the fans and the owner happy or you get fired.</p></div>');
 
   // ---------- new career ----------
@@ -89,18 +97,22 @@
     let pick = null, diff = 1, len = 20, ppq = 3;
     const tmp = { teams: CK.TEAMS };
     // preview league to show strengths
-    const prev = L.newLeague({ team: 0 }); const strengths = prev.teams.map(t => L.teamStars(t));
+    let real = true, prev, strengths;
+    const mk = () => { prev = L.newLeague({ team: 0, real }); strengths = prev.teams.map(t => L.teamStars(t)); };
+    mk();
     const draw = () => {
       app().innerHTML = '<div class="page new"><h2>NEW CAREER</h2>' +
         '<label class="fld">COACH NAME<input id="cname" maxlength="16" value="' + U.esc(UI._cn || 'Coach') + '"></label>' +
         '<div class="lbl">PICK YOUR TEAM</div><div class="tgrid">' +
-        prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '"><b>' + t.ab + '</b><span>' + t.city + '</span>' + UI.stars(strengths[i]) + '</button>').join('') + '</div>' +
+        prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'tlg') + '<b>' + t.ab + '</b><span>' + U.esc(t.name || t.city) + '</span>' + UI.stars(strengths[i]) + '</button>').join('') + '</div>' +
+        '<div class="lbl">ROSTERS</div><div class="seg" id="rr"><button data-v="1" class="' + (real ? 'sel' : '') + '">REAL 2026-27 PLAYERS</button><button data-v="0" class="' + (!real ? 'sel' : '') + '">MADE-UP PLAYERS</button></div>' +
         '<div class="lbl">DIFFICULTY</div><div class="seg" id="dif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>' +
         '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [12, 20, 30].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + ' GAMES</button>').join('') + '</div>' +
         '<div class="lbl">POSSESSIONS YOU PLAY PER QUARTER</div><div class="seg" id="ppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (ppq === n ? 'sel' : '') + '">' + n + ' + ' + n + '</button>').join('') + '</div>' +
         '<button class="btn" id="go" ' + (pick == null ? 'disabled' : '') + '>' + (pick == null ? 'PICK A TEAM' : 'COACH ' + prev.teams[pick].city.toUpperCase()) + '</button>' +
         '<button class="btn alt" id="back">BACK</button></div>';
       click('.tpick', el => { UI._cn = $('#cname').value; pick = +el.dataset.i; draw(); });
+      click('#rr button', el => { UI._cn = $('#cname').value; real = el.dataset.v === '1'; mk(); draw(); });
       click('#dif button', el => { UI._cn = $('#cname').value; diff = +el.dataset.v; draw(); });
       click('#len button', el => { UI._cn = $('#cname').value; len = +el.dataset.v; draw(); });
       click('#ppq button', el => { UI._cn = $('#cname').value; ppq = +el.dataset.v; draw(); });
@@ -127,7 +139,7 @@
     if (S.phase === 'fa') return UI.fa();
     const unread = S.inbox.filter(m => !m.read).length;
     app().innerHTML = '<div class="hub" style="--tc:' + me.c1 + ';--tc2:' + me.c2 + '">' +
-      '<header><div class="tn">' + teamTag(me) + '<div><b>' + U.esc(me.city.toUpperCase()) + '</b><span>' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '</span></div></div>' +
+      '<header><div class="tn">' + (UI.logo(me, 'hd') || teamTag(me)) + '<div><b>' + U.esc((me.city + ' ' + (me.name || '')).toUpperCase()) + '</b><span>' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '</span></div></div>' +
       '<div class="cc"><i>CC</i><b>' + S.cc + '</b></div></header>' +
       '<div class="meters"><div>FANS ' + bar(S.fans, '#3dff6a') + '</div><div>OWNER ' + bar(S.owner, S.owner < 25 ? '#ff4d4d' : '#ffd23f') + '</div></div>' +
       '<main id="tab"></main>' +
@@ -147,14 +159,14 @@
       const opp = L.T(g.home === S.me ? g.away : g.home), isHome = g.home === S.me;
       const label = S.phase === 'playoffs' ? L.ROUND_NAMES[S.playoff.r] : 'GAME ' + (S.round + 1) + ' OF ' + S.len;
       h += '<div class="next"><div class="lbl">' + label + (isHome ? ' / HOME' : ' / AWAY') + '</div>' +
-        '<div class="mu"><div class="side">' + teamTag(me) + '<b>' + rec(me) + '</b>' + UI.stars(L.teamStars(me)) + '</div><i>VS</i><div class="side">' + teamTag(opp) + '<b>' + rec(opp) + '</b>' + UI.stars(L.teamStars(opp)) + '</div></div>' +
-        '<div class="oppcity">' + U.esc(opp.city) + '</div>' +
+        '<div class="mu"><div class="side">' + bigTeam(me) + '<b>' + rec(me) + '</b>' + UI.stars(L.teamStars(me)) + '</div><i>VS</i><div class="side">' + bigTeam(opp) + '<b>' + rec(opp) + '</b>' + UI.stars(L.teamStars(opp)) + '</div></div>' +
         '<button class="btn big" id="play">PLAY GAME</button><button class="btn alt" id="sim">SIM GAME<small>fewer Coach Credits</small></button></div>';
     } else if (S.phase === 'playoffs') {
       h += '<div class="next"><div class="lbl">PLAYOFFS</div><p>Your season is over. ' + (S.playoff.r < 4 ? 'The bracket keeps going without you.' : '') + '</p><button class="btn big" id="simpo">SIM REST OF PLAYOFFS</button></div>';
     }
     if (S.phase === 'playoffs') h += bracket();
-    h += '<div class="lbl">INBOX</div><div class="inbox">' + S.inbox.slice(0, 12).map(m => '<div class="msg ' + (m.read ? '' : 'new') + (m.choices ? ' ask' : '') + '" data-id="' + m.id + '"><b>' + U.esc(m.title) + '</b><span>' + U.esc(m.body).slice(0, 70) + (m.body.length > 70 ? '...' : '') + '</span></div>').join('') + '</div>';
+    h = '<div class="cols"><div>' + h + '</div><div>';
+    h += '<div class="lbl">INBOX</div><div class="inbox">' + S.inbox.slice(0, 12).map(m => '<div class="msg ' + (m.read ? '' : 'new') + (m.choices ? ' ask' : '') + '" data-id="' + m.id + '"><b>' + U.esc(m.title) + '</b><span>' + U.esc(m.body).slice(0, 70) + (m.body.length > 70 ? '...' : '') + '</span></div>').join('') + '</div></div></div>';
     $('#tab').innerHTML = h;
     if (g) {
       click('#play', () => startGame(g, false));
@@ -199,7 +211,7 @@
     const pay = L.payroll(me);
     $('#tab').innerHTML = '<div class="rhead"><span>' + me.roster.length + '/' + CK.ROSTER_MAX + ' PLAYERS</span><span class="' + (pay > CK.CAP ? 'bad' : '') + '">PAYROLL ' + U.money(pay) + ' / ' + U.money(CK.CAP) + '</span></div>' +
       '<div class="lbl">STARTERS <small>tap a player to train, swap or release</small></div>' +
-      ro.map((p, i) => (i === 5 ? '<div class="lbl">BENCH</div>' : '') + prow(p, me)).join('');
+      '<div class="rgrid">' + ro.slice(0, 5).map(p => prow(p, me)).join('') + '</div><div class="lbl">BENCH</div><div class="rgrid">' + ro.slice(5).map(p => prow(p, me)).join('') + '</div>';
     click('.prow', el => UI.player(L.P(el.dataset.id)));
   }
   function prow(p, t, extra) {
@@ -214,6 +226,7 @@
     const html = '<div class="pcard" style="--c:' + (t ? t.c1 : '#444') + '">' + UI.portrait(p, t, 72) +
       '<div><h2>' + U.esc(L.name(p)) + '</h2><div class="sub">' + p.pos + ' / #' + p.num + ' / ' + Math.floor(p.ht / 12) + "'" + (p.ht % 12) + '" / AGE ' + p.age + (t ? ' / ' + t.ab : ' / FREE AGENT') + '</div>' + UI.stars(L.stars(p)) + '<span class="ovr">OVR ' + L.ovr(p).toFixed(1) + '</span></div></div>' +
       '<div class="rt">' + CK.RKEYS.map(k => '<div class="rr"><span>' + CK.RATING_NAMES[k] + '</span>' + pips(p.r[k]) + '<b>' + p.r[k] + '</b>' + (mine && !opts ? '<button class="tr" data-k="' + k + '" ' + (p.r[k] >= 10 ? 'disabled' : '') + '>+1 <small>' + O.trainCost(p, k) + ' CC</small></button>' : '') + '</div>').join('') + '</div>' +
+      (mine && !opts ? '<div class="look">LOOK <button class="btn sm alt" id="lskin">SKIN TONE</button><button class="btn sm alt" id="lhair">HAIR</button><button class="btn sm alt" id="lhc">HAIR COLOR</button></div>' : '') +
       '<div class="mor">MORALE ' + bar(p.morale, p.morale < 40 ? '#ff4d4d' : p.morale < 65 ? '#ffd23f' : '#3dff6a') + '</div>' +
       '<div class="sl">POTENTIAL ' + UI.stars(p.potLo == null || p.scout || mine || p.tm >= 0 ? p.pot : (p.potLo + p.potHi) / 2) + '</div>' +
       '<div class="sl">CONTRACT ' + U.money(p.sal) + ' / ' + Math.max(0, p.yrs) + ' YR' + (p.yrs === 1 ? '' : 'S') + '</div>' +
@@ -223,6 +236,8 @@
     UI.modal(html, m => {
       m.querySelectorAll('.tr').forEach(b => b.onclick = () => { const err = O.train(p, b.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('swish'); L.save(); UI.toast(p.ln + ' ' + CK.RATING_NAMES[b.dataset.k] + ' +1'); UI.player(p); UI.hub(); });
       const mk = m.querySelector('#mkst'); if (mk) mk.onclick = () => chooseSwap(p);
+      const cyc = (id, k, n) => { const b = m.querySelector(id); if (b) b.onclick = () => { p[k] = (p[k] + 1) % n; L.save(); UI.player(p); }; };
+      cyc('#lskin', 'skin', 6); cyc('#lhair', 'hair', 6); cyc('#lhc', 'hc', 6);
       const rl = m.querySelector('#rel'); if (rl) rl.onclick = () => {
         if (me.roster.length <= CK.ROSTER_MIN) return UI.toast('Need at least ' + CK.ROSTER_MIN + ' players.', true);
         if (!confirm('Release ' + L.name(p) + '? He becomes a free agent.')) return;
@@ -306,12 +321,14 @@
       '<div class="lbl">SETTINGS</div>' +
       '<div class="setrow">DIFFICULTY<div class="seg" id="sdif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (S.diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
       '<div class="setrow">POSSESSIONS PER QUARTER<div class="seg" id="sppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (S.ppq === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
+      '<div class="setrow">TEAM LOGOS<div class="seg" id="slg"><button data-v="real" class="' + (S.logos !== 'retro' ? 'sel' : '') + '">REAL</button><button data-v="retro" class="' + (S.logos === 'retro' ? 'sel' : '') + '">RETRO LETTERS</button></div></div>' +
       '<div class="setrow">SOUND<div class="seg" id="ssnd"><button data-v="1" class="' + (CK.SFX.on ? 'sel' : '') + '">ON</button><button data-v="0" class="' + (!CK.SFX.on ? 'sel' : '') + '">OFF</button></div></div>' +
       '<button class="btn alt sm" id="howb">HOW TO PLAY</button><button class="btn alt sm" id="quit">TITLE SCREEN</button>' +
       '<p class="dim">Coach ' + U.esc(S.coach) + ' / career ' + S.totW + '-' + S.totL + ' / saves automatically on this device</p>';
     click('.fac .btn', el => { const err = O.upgrade(el.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.hub('office'); UI.toast('Upgraded!'); });
     click('#sdif button', el => { S.diff = +el.dataset.v; L.save(); UI.hub('office'); });
     click('#sppq button', el => { S.ppq = +el.dataset.v; L.save(); UI.hub('office'); });
+    click('#slg button', el => { S.logos = el.dataset.v; L.save(); UI.hub('office'); });
     click('#ssnd button', el => { CK.SFX.on = el.dataset.v === '1'; S.sfx = CK.SFX.on; L.save(); UI.hub('office'); });
     click('#howb', UI.howTo); click('#quit', UI.title);
   }
@@ -349,7 +366,7 @@
       '<button class="btn" id="todraft" ' + (ex.length ? 'disabled' : '') + '>' + (ex.length ? 'DECIDE ON EVERY PLAYER' : 'GO TO THE DRAFT') + '</button></div>';
     click('.rsb .btn', el => {
       const p = L.P(el.dataset.id), y = +el.dataset.y;
-      if (y) { const after = L.payroll(me) - ex.reduce((a, q) => a + q.sal, 0) + O.ask(p); if (after > CK.CAP + 8) return UI.toast('That would put you way over the cap.', true); O.resign(p, y); UI.toast(p.ln + ' re-signed'); }
+      if (y) { const after = L.payroll(me) - ex.reduce((a, q) => a + q.sal, 0) + O.ask(p); if (after > CK.APRON) return UI.toast('That would put you over the ' + U.money(CK.APRON) + ' apron.', true); O.resign(p, y); UI.toast(p.ln + ' re-signed'); }
       else { O.release(p); }
       L.save(); UI.resign();
     });

@@ -19,7 +19,7 @@
       lineH: L.lineup(home), lineA: L.lineup(away), tut: !S.tutDone
     };
     buildQuarter();
-    root = document.getElementById('game'); root.classList.add('on');
+    E.st = null; root = document.getElementById('game'); root.classList.add('on');
     canvas = root.querySelector('canvas'); ctx = canvas.getContext('2d');
     canvas.width = E.W; canvas.height = E.H;
     CK.RD.buildCourt(home, away);
@@ -33,9 +33,12 @@
   function fit() {
     const vw = innerWidth, vh = innerHeight;
     const s = Math.min(vw / E.W, vh / E.H);
-    canvas.style.width = Math.floor(E.W * s) + 'px'; canvas.style.height = Math.floor(E.H * s) + 'px';
-    root.style.setProperty('--cw', Math.floor(E.W * s) + 'px');
+    const st = root.querySelector('#stage');
+    st.style.width = Math.floor(E.W * s) + 'px'; st.style.height = Math.floor(E.H * s) + 'px';
+    root.style.setProperty('--u', s + 'px');
+    root.classList.toggle('portrait', vh > vw && M.touch);
   }
+  M.touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   function buildQuarter() {
     const n = g.ot ? 2 : g.ppq, fill = (g.ot ? 10 : POSS_Q) - n;
     const steps = [];
@@ -60,7 +63,8 @@
   function intro() {
     g.mode = 'intro';
     const S = CK.S;
-    banner('<div class="vs"><span style="--c:' + g.away.c1 + '">' + g.away.ab + '</span><i>AT</i><span style="--c:' + g.home.c1 + '">' + g.home.ab + '</span></div><div class="sub">' + (g.label || 'WEEK ' + (S.round + 1)) + '</div>', 1800, () => next());
+    const card = t => '<span class="vt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + logoImg(t) + '<b>' + t.ab + '</b><small>' + U.esc((t.name || t.city).toUpperCase()) + '</small><em>' + t.w + '-' + t.l + '</em></span>';
+    banner('<div class="vs">' + card(g.away) + '<i>AT</i>' + card(g.home) + '</div><div class="sub">' + (g.label || 'GAME ' + (S.round + 1)) + '</div>', 2200, () => next(), true);
   }
   function next() {
     if (!g) return;
@@ -140,7 +144,8 @@
     const user = step.k;
     const offT = user === 'off' ? g.me : g.opp, defT = user === 'off' ? g.opp : g.me;
     const lo = offT === g.home ? g.lineH : g.lineA, ld = defT === g.home ? g.lineH : g.lineA;
-    const tips = user === 'off' ? 'Move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. MOVE breaks ankles. Green ring = open.' : 'You guard the ball. CONTEST to jump at shooters, STEAL to poke it. Stay between your man and the rim.';
+    const tips = !M.touch ? (user === 'off' ? 'WASD to move. Hold SPACE and let go at the top of the meter (green = perfect). K passes to the open man, 1-5 picks a teammate. L is a crossover. Drive in and shoot to dunk.' : 'You guard the ball. SPACE to contest a shot, L to go for the steal. Stay between your man and the rim.')
+      : user === 'off' ? 'Move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. MOVE breaks ankles. Green ring = open.' : 'You guard the ball. CONTEST to jump at shooters, STEAL to poke it. Stay between your man and the rim.';
     const clutch = step.clutch && Math.abs(g.hs - g.as) <= 8;
     let html = '<div class="big">' + (user === 'off' ? 'YOUR BALL' : 'DEFENSE') + '</div>';
     if (clutch) html = '<div class="clutch">CLUTCH TIME</div>' + html;
@@ -153,12 +158,13 @@
       const st = E.start({
         off: Object.assign({ players: lo.st.slice(0, 5) }, M.jersey(offT, offT === g.home)),
         def: Object.assign({ players: ld.st.slice(0, 5) }, M.jersey(defT, defT === g.home)),
-        user, diff: CK.S.diff, onEnd: r => liveEnd(r, step, offT), onFx: onFx
+        user, diff: CK.S.diff, onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
       });
       st.ents.forEach(e => { if (g.fire[e.id]) e.fire = true; });
       g.clutch = clutch;
     });
   }
+  function say(t) { const el = root.querySelector('#ticker'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   function onFx(k) {
     CK.SFX.play(k);
     if (k === 'dunk' || k === 'block' || k === 'ankles') g.hype = 1;
@@ -197,9 +203,9 @@
     return L.roster(t).map(p => ({ p, b: g.box[p.id] })).filter(x => x.b).sort((a, b) => (b.b.pts + b.b.reb + b.b.ast) - (a.b.pts + a.b.reb + a.b.ast)).slice(0, n)
       .map(x => '<div class="pr"><span>' + U.esc(L.short(x.p)) + '</span><b>' + x.b.pts + ' PTS</b> ' + x.b.reb + ' REB ' + x.b.ast + ' AST</div>').join('');
   }
-  const scoreLine = () => '<div class="fs"><span style="--c:' + g.away.c1 + '">' + g.away.ab + ' ' + g.as + '</span><span style="--c:' + g.home.c1 + '">' + g.home.ab + ' ' + g.hs + '</span></div>';
+  const scoreLine = () => '<div class="fs"><span style="--c:' + g.away.c1 + '">' + logoImg(g.away) + g.away.ab + ' ' + g.as + '</span><span style="--c:' + g.home.c1 + '">' + logoImg(g.home) + g.home.ab + ' ' + g.hs + '</span></div>';
   function final() {
-    g.mode = 'final'; CK.SFX.crowd(false);
+    g.mode = 'final'; CK.SFX.crowd(false); E.st = null; CK.RD.drawIdle(ctx);
     const S = CK.S, won = (g.meHome ? g.hs > g.as : g.as > g.hs);
     // credit games played
     [g.lineH, g.lineA].forEach(l => l.st.concat(l.bench.slice(0, 3)).forEach(p => { const b = g.box[p.id] || (g.box[p.id] = L.blankStats()); b.gp = 1; }));
@@ -260,7 +266,11 @@
     if (g.paused) return;
     if (E.st && g.mode === 'live') {
       acc += dt;
-      while (acc >= 1 / 60) { E.update(1 / 60, CK.IN); CK.IN.consume(); acc -= 1 / 60; }
+      while (acc >= 1 / 60) {
+        // screen stick -> court directions (screen right = toward the hoop)
+        const I = CK.IN, EI = { jx: I.jy, jy: -I.jx, A: I.A, Ap: I.Ap, Ar: I.Ar, Bp: I.Bp, Cp: I.Cp, tap: I.tap, pass: I.pass };
+        E.update(1 / 60, EI); I.consume(); acc -= 1 / 60;
+      }
       if (E.st) { root.querySelector('#sc').textContent = Math.max(0, Math.ceil(E.st.sc)); root.querySelector('#sc').classList.toggle('low', E.st.sc < 5); }
     }
     if (E.st) CK.RD.draw(ctx, { hype: g.hype });
@@ -268,11 +278,12 @@
   }
 
   // ---------- HUD / overlays ----------
+  const logoImg = t => { const l = CK.RD.logo(t); return l ? '<img src="' + l.src + '" alt="">' : CK.S.logos === 'retro' || !t.logo ? '' : '<img src="' + CK.logoUrl(t.logo) + '" alt="" onerror="this.remove()">'; };
   function hud() {
     const h = root.querySelector('#hud');
-    h.innerHTML = '<div class="tm" style="--c:' + g.away.c1 + '"><i>' + g.away.ab + '</i><b>' + g.as + '</b></div>' +
+    h.innerHTML = '<div class="tm" style="--c:' + g.away.c1 + '">' + logoImg(g.away) + '<i>' + g.away.ab + '</i><b>' + g.as + '</b></div>' +
       '<div class="mid"><div>' + qName() + ' ' + U.clock(g.sec) + '</div><div class="scw">SHOT <span id="sc">24</span></div></div>' +
-      '<div class="tm r" style="--c:' + g.home.c1 + '"><b>' + g.hs + '</b><i>' + g.home.ab + '</i></div>';
+      '<div class="tm r" style="--c:' + g.home.c1 + '"><b>' + g.hs + '</b><i>' + g.home.ab + '</i>' + logoImg(g.home) + '</div>';
   }
   function setButtons(user) {
     const a = root.querySelector('#btnA'), b = root.querySelector('#btnB'), c = root.querySelector('#btnC');

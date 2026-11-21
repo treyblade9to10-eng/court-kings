@@ -21,7 +21,7 @@
     let dOwner = Math.round((pct - exp) * 70);
     if (finish !== 'Missed playoffs') dOwner += 8;
     if (won) dOwner += 30;
-    if (L.payroll(me) > CK.CAP) dOwner -= 6;
+    if (L.payroll(me) > CK.APRON) dOwner -= 6;
     S.owner = U.clamp(S.owner + dOwner, 0, 100);
     const ccWin = won ? 20 : finish !== 'Missed playoffs' ? 6 : 2;
     S.cc += ccWin;
@@ -124,7 +124,7 @@
   O.sign = (p, yrs) => {
     const S = CK.S, me = L.myTeam(), ask = L.salaryFor(p);
     if (me.roster.length >= CK.ROSTER_MAX) return 'Roster is full (' + CK.ROSTER_MAX + ').';
-    if (L.payroll(me) + ask > CK.CAP && ask > 1.5) return 'Not enough cap space.';
+    if (L.payroll(me) + ask > CK.CAP && ask > 2.5) return 'Over the cap: you can only sign minimum deals ($2.5M or less).';
     S.fa = S.fa.filter(x => x !== p.id); p.tm = S.me; p.sal = ask; p.yrs = yrs; p.morale = 70;
     me.roster.push(p.id); L.uniqueNums(me);
     return null;
@@ -134,9 +134,9 @@
     S.teams.forEach(t => {
       if (t.id === S.me) return;
       let guard = 0;
-      while (t.roster.length < 11 && guard++ < 20) {
+      while (t.roster.length < 13 && guard++ < 20) {
         const room = CK.CAP - L.payroll(t);
-        const c = O.faList().find(p => L.salaryFor(p) <= Math.max(1.5, room)); if (!c) break;
+        const c = O.faList().find(p => L.salaryFor(p) <= Math.max(2.5, room)); if (!c) break;
         S.fa = S.fa.filter(x => x !== c.id); c.tm = t.id; c.sal = L.salaryFor(c); c.yrs = U.irand(1, 3); t.roster.push(c.id);
       }
       while (t.roster.length > CK.ROSTER_MAX) O.release(L.roster(t).sort((a, b) => L.ovr(a) - L.ovr(b))[0]);
@@ -176,8 +176,8 @@
     const thPay = L.payroll(t) + give.reduce((s, p) => s + p.sal, 0) - get.reduce((s, p) => s + p.sal, 0);
     let err = null;
     if (!give.length || !get.length) err = 'Pick players on both sides.';
-    else if (myPay > CK.CAP + 5) err = 'You would be over the cap.';
-    else if (thPay > CK.CAP + 5) err = 'They would be over the cap.';
+    else if (myPay > CK.APRON) err = 'You would be over the ' + U.money(CK.APRON) + ' apron.';
+    else if (thPay > CK.APRON) err = 'They would be over the apron.';
     else if (me.roster.length - give.length + get.length > CK.ROSTER_MAX) err = 'Your roster would be too big.';
     else if (me.roster.length - give.length + get.length < CK.ROSTER_MIN) err = 'Your roster would be too small.';
     else if (t.roster.length + give.length - get.length > CK.ROSTER_MAX + 1) err = 'Their roster would be too big.';

@@ -1,12 +1,13 @@
 // Court Kings - on-court possession engine (half court, 10 players, ball physics, AI)
 (function (CK) {
   const U = CK.U, E = CK.CT = {};
-  const W = 216, H = 384, Y0 = 96, SY = 3.15, SX = 4.0, ZS = 3.3;
+  // landscape side view: hoop on the right. court x (sideline to sideline) runs down the screen,
+  // court y (baseline -> half court) runs right -> left, z is height.
+  const W = 400, H = 225, BX = 372, YM = 128, KY = 7.0, KX = 2.9, SK = 0.55, ZS = 3.0;
   const HX = 0, HY = 5.25, RIM = 10;
-  E.W = W; E.H = H; E.Y0 = Y0;
-  const fy = y => 0.86 + 0.14 * U.clamp(y, -10, 70) / 47;
-  const proj = E.proj = (x, y, z) => { const f = fy(y); return [W / 2 + x * SX * f, Y0 + y * SY - (z || 0) * ZS * f]; };
-  const unproj = E.unproj = (sx, sy) => { let y = (sy - Y0) / SY; return [(sx - W / 2) / (SX * fy(y)), y]; };
+  E.W = W; E.H = H;
+  const proj = E.proj = (x, y, z) => [BX - y * KY + x * SK, YM + x * KX - (z || 0) * ZS];
+  const unproj = E.unproj = (sx, sy) => { const x = (sy - YM) / KX; return [x, (BX + x * SK - sx) / KY]; };
   const is3 = E.is3 = (x, y) => y <= 14 ? Math.abs(x) >= 22 : Math.hypot(x - HX, y - HY) >= 23.75;
   const dHoop = e => Math.hypot(e.x - HX, e.y - HY);
   const SPOTS = [[0, 29], [-17, 20], [17, 20], [-21.5, 4], [8, 9], [21.5, 4], [-8, 9], [-11, 16], [11, 16], [0, 22]];
@@ -33,7 +34,7 @@
     const pg = st.ents[0];
     st.ball = { s: 'hold', h: pg, x: pg.x, y: pg.y, z: 3, vx: 0, vy: 0, vz: 0, t: 0 };
     pg.ball = true;
-    st.user = cfg.user === 'off' ? pg : pg.dfn;
+    st.user = cfg.user === 'off' ? pg : cfg.user === 'def' ? pg.dfn : null;
     st.msgT = 0;
     return st;
   };
@@ -51,6 +52,8 @@
   const pop = (text, x, y, col, s, life) => { E.st.pops.push({ text, x, y, col: col || '#fff', s: s || 2, t: 0, life: life || 1.3 }); };
   E.pop = pop;
   const fx = (k, d) => { const f = E.st.cfg.onFx; if (f) f(k, d); };
+  const say = t => { const f = E.st.cfg.onSay; if (f) f(t); };
+  const NM = e => e.pl.ln.toUpperCase();
   const burst = (x, y, z, n, cols, spd) => { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = U.rand(2, spd || 14); E.st.parts.push({ x, y, z, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.6, vz: U.rand(4, 18), t: 0, life: U.rand(0.6, 1.4), c: U.pick(cols) }); } };
   const nearestDef = (e, list) => { let best = null, bd = 99; (list || (e.side === 0 ? defE() : offE())).forEach(d => { const dd = Math.hypot(d.x - e.x, d.y - e.y); if (dd < bd) { bd = dd; best = d; } }); return [best, bd]; };
   E.openness = e => nearestDef(e)[1];
@@ -112,6 +115,7 @@
       else { e.userMove = 0; if (h === e && e.state === 'run') { e.tx = e.x; e.ty = e.y; } }
       if (h === e && e.state === 'run') {
         if (IN.tap) { const tm = tapTarget(IN.tap); if (tm && tm !== e) passTo(e, tm); }
+        if (IN.pass != null) { const tm = offE()[IN.pass]; if (tm && tm !== e) passTo(e, tm); }
         if (IN.Bp) { const tm = bestPass(e, IN.jx, IN.jy); if (tm) passTo(e, tm); }
         if (IN.Cp && e.cd <= 0) crossover(e, IN);
         if (IN.Ap) startShot(e, true);
@@ -154,7 +158,7 @@
     if (d && dd < 3.8 && d.stun <= 0) {
       const p = 0.06 + (e.pl.r.pas - d.pl.r.def) * 0.03 + (e.pl.r.ath - d.pl.r.ath) * 0.015 + (e.fire ? 0.12 : 0) - (inFront(d, e) ? 0 : 0.05);
       if (Math.random() < U.clamp(p, 0.04, 0.5) / (e.side === 0 ? st.aiMul.def : 1)) {
-        d.stun = 1.1; d.fell = true; pop('ANKLES!', 0, 34, '#ffd23f', 3); st.shake = 0.5; fx('ankles'); st.hl.push('ankles');
+        d.stun = 1.1; d.fell = true; pop('ANKLES!', 0, 34, '#ffd23f', 3); st.shake = 0.5; fx('ankles'); st.hl.push('ankles'); say(NM(e) + ' SENDS ' + NM(d) + ' TO THE FLOOR!');
       } else if (Math.random() < 0.05 * (d.pl.r.def / 10)) {
         // poked loose
         stealBall(d, e); return;
@@ -174,7 +178,7 @@
   function stealBall(d, h) {
     const st = E.st, b = st.ball;
     h.ball = false; b.s = 'loose'; b.missT = null; b.src = 'poke'; b.vx = (d.x - h.x) * 2 + U.rand(-3, 3); b.vy = (d.y - h.y) * 2 + U.rand(-3, 3); b.vz = 6; b.lastTouch = d.side; b.steal = d;
-    pop('STOLEN!', 0, 34, d.side === 1 && st.cfg.user === 'def' ? '#7cff6b' : '#ff5050', 3); fx('steal'); st.shake = 0.3;
+    pop('STOLEN!', 0, 34, d.side === 1 && st.cfg.user === 'def' ? '#7cff6b' : '#ff5050', 3); fx('steal'); st.shake = 0.3; say(NM(d) + ' WITH THE STEAL!');
   }
 
   // ---------- passing ----------
@@ -283,6 +287,7 @@
     if (r.kind === 'dunk') st.hl.push(e.oopCatch ? 'oop' : 'dunk');
     if (r.green && r.three) st.hl.push('splash');
     st.scorer = e;
+    say(r.kind === 'dunk' ? (e.oopCatch ? (lp && lp.from !== e ? NM(lp.from) + ' LOBS... ' : '') + NM(e) + ' THROWS IT DOWN!' : NM(e) + U.pick([' WITH THE HAMMER!', ' THROWS IT DOWN!', ' POSTERIZES HIM!'])) : r.three ? NM(e) + (r.green ? ' FROM DOWNTOWN... BANG!' : ' HITS THE THREE!') : NM(e) + U.pick([' SCORES.', ' KNOCKS IT DOWN.', ' GETS IT TO GO.']));
     if (r.foul) { pop('AND ONE', 0, 46, '#7cd6ff', 2, 1.6); fx('whistle'); later(() => { if (st.phase !== 'end') startFT(e, 1); }, 1.3); st.phase = 'wait'; return; }
     fx('cheer');
     end('make', '', 1.6);
@@ -349,6 +354,27 @@
     if (e.oop) return; // heading to the rim for a lob
     if (b.s === 'pass' && b.to === e) { e.tx = b.ex; e.ty = b.ey; return; } // come get the pass
     e.cutT -= dt;
+    // pick and roll: bigs come set a screen on the ball handler's defender, then roll to the rim
+    if (e.scr) {
+      const hd = h && h.dfn;
+      if (!h || !hd || h === e) e.scr = null;
+      else {
+        e.scr.t -= dt;
+        if (!e.scr.set) {
+          const tx = hd.x + e.scr.s * 1.8, ty = hd.y + 0.8;
+          e.tx = tx; e.ty = ty;
+          if (Math.hypot(e.x - tx, e.y - ty) < 1.5) { e.scr.set = true; e.scr.t = 1.1; }
+          if (e.scr.t < 0) e.scr = null;
+        } else {
+          e.tx = e.x; e.ty = e.y;
+          if (!e.scr.hit && hd.stun <= 0 && Math.hypot(hd.x - e.x, hd.y - e.y) < 2.1 && Math.hypot(hd.vx, hd.vy) > 1) {
+            e.scr.hit = true; hd.stun = 0.6 + e.pl.r.ins * 0.03; say(NM(e) + ' SETS THE PICK'); fx('catch');
+          }
+          if (e.scr.t <= 0) { e.scr = null; e.cutting = true; e.cutT = 1.8; }
+        }
+        if (e.scr) return;
+      }
+    }
     if (e.cutting) {
       e.tx = HX + (e.x < 0 ? -2.5 : 2.5); e.ty = HY + 2.5;
       if (dHoop(e) < 4.5 || e.cutT < 0) { e.cutting = false; e.spot = freeSpot(e, [3, 5, 1, 2]); e.cutT = U.rand(2, 4); }
@@ -357,6 +383,7 @@
     if (e.cutT <= 0) {
       e.cutT = U.rand(2.2, 4.5);
       const r = Math.random();
+      if (r < 0.3 && h && h !== e && (e.pl.pos === 'C' || e.pl.pos === 'PF') && dHoop(h) > 15 && !offE().some(o => o.scr)) { e.scr = { t: 2.6, s: h.x > 0 ? -1 : 1 }; return; }
       if (r < 0.32 && h && h !== e) { e.cutting = true; e.cutT = 1.6; return; }
       if (r < 0.6) e.spot = freeSpot(e);
     }
@@ -469,8 +496,10 @@
       e.vx += (dvx - e.vx) * acc; e.vy += (dvy - e.vy) * acc;
     } else if (e.state !== 'fin') { e.vx *= 0.85; e.vy *= 0.85; }
     if (e.state !== 'fin') { e.x += e.vx * dt; e.y += e.vy * dt; }
-    if (Math.abs(e.vx) > 0.5) e.face = e.vx > 0 ? 1 : -1;
-    e.back = e.vy < -3;
+    // screen facing: moving toward the hoop (y down) = facing right
+    if (Math.abs(e.vy) > 0.8) e.face = e.vy < 0 ? 1 : -1;
+    else if (e.state === 'run' && Math.hypot(e.vx, e.vy) < 1.5) e.face = e.side === 0 ? 1 : -1;
+    if (e.state === 'shoot' || e.state === 'fin') e.face = 1;
     const sp = Math.hypot(e.vx, e.vy); e.run += sp * dt;
     e.x = U.clamp(e.x, -24.5, 24.5); e.y = U.clamp(e.y, 0.6, 46.5);
     // separation
@@ -484,7 +513,7 @@
     if (b.s === 'hold') {
       const h = b.h, side = h.face;
       if (h.state === 'shoot' || h.state === 'fin' || h.state === 'ftm') { b.x = h.x; b.y = h.y - 0.2; b.z = h.z + 7.2; }
-      else { b.x = h.x + side * 1.2; b.y = h.y + 0.3; b.z = Math.abs(Math.sin(st.t * 8.5)) * 3; if (b.z < 0.25 && !b.bounced) { b.bounced = true; if (st.phase !== 'end') fx('bounce'); } if (b.z > 1) b.bounced = false; }
+      else { b.x = h.x + 0.6; b.y = h.y - side * 0.9; b.z = Math.abs(Math.sin(st.t * 8.5)) * 3; if (b.z < 0.25 && !b.bounced) { b.bounced = true; if (st.phase !== 'end') fx('bounce'); } if (b.z > 1) b.bounced = false; }
     } else if (b.s === 'pass') {
       b.t += dt; const u = Math.min(1, b.t / b.T);
       b.x = U.lerp(b.sx, b.ex, u); b.y = U.lerp(b.sy, b.ey, u); b.z = U.lerp(b.sz, b.ez, u) + (b.lob ? 7 : 1.2) * 4 * u * (1 - u);
@@ -497,6 +526,7 @@
           let p = 0.3 + (d.pl.r.def - b.from.pl.r.pas) * 0.05; if (st.cfg.user === 'off' && d.side === 1) p *= st.aiMul.def;
           if (Math.random() < U.clamp(p, 0.08, 0.85)) {
             b.s = 'hold'; b.h = d; d.ball = true; B(d.id).stl++;
+            say(NM(d) + ' JUMPS THE PASSING LANE!');
             pop('PICKED OFF!', 0, 34, st.cfg.user === 'def' ? '#7cff6b' : '#ff5050', 3); fx('steal'); st.shake = 0.3;
             end('tov', 'Pass intercepted', 1.3);
           }
@@ -516,6 +546,7 @@
       const r = b.res;
       if (r.blk && u >= 1) {
         const d = r.blk; B(d.id).blk++;
+        say(NM(d) + ' SAYS NO!');
         pop(U.pick(['REJECTED!', 'GET THAT OUT!', 'DENIED!']), 0, 34, d.side === 1 && st.cfg.user === 'def' ? '#7cff6b' : '#ff7070', 3); fx('block'); st.shake = 0.6;
         st.hl.push(st.cfg.user === 'def' ? 'block' : '');
         Object.assign(b, { s: 'loose', vx: (b.sx - HX) * 0.6 + U.rand(-5, 5), vy: U.rand(6, 14), vz: 4, lastTouch: d.side, missT: 0 });
@@ -567,7 +598,7 @@
     } else {
       if (fromShot) { pop('OFF. BOARD', 0, 34, st.cfg.user === 'off' ? '#7cff6b' : '#ff7070', 2); st.sc = Math.max(st.sc, 14); }
       if (st.cfg.user === 'off') st.user = e;
-      else if (e.dfn) st.user = e.dfn;
+      else if (st.cfg.user === 'def' && e.dfn) st.user = e.dfn;
     }
   }
   function resetInbound() {
