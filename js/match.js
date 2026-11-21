@@ -16,8 +16,11 @@
       home, away, meHome, me: meHome ? home : away, opp: meHome ? away : home,
       hs: 0, as: 0, q: 1, sec: QSEC, steps: [], si: 0, box: {}, hl: [], streak: {}, fire: {}, log: [],
       po: !!opts.po, label: opts.label || '', done, hype: 0, paused: false, mode: 'intro', ot: 0, live: 0, ppq: S.ppq, myPoss: 0, myPts: 0,
-      lineH: L.lineup(home), lineA: L.lineup(away), tut: !S.tutDone
+      lineH: L.lineup(home), lineA: L.lineup(away), tut: !S.tutDone && !U.load('ck_tut', 0),
+      full: opts.full != null ? opts.full : S.mode !== 'highlights', qsec: (opts.qlen || S.qlen || 3) * 60,
+      exhib: !!opts.exhib, net: opts.net || null, q1: Math.random() < 0.5 ? 'home' : 'away'
     };
+    if (g.net) { g.full = true; g.net.onGone = () => { g.netGone = true; flash('YOUR FRIEND LEFT: CPU TAKES OVER'); }; }
     buildQuarter();
     E.st = null; root = document.getElementById('game'); root.classList.add('on');
     canvas = root.querySelector('canvas'); ctx = canvas.getContext('2d');
@@ -26,6 +29,7 @@
     CK.inGame = true; CK.IN.reset(); CK.SFX.crowd(true);
     fit(); addEventListener('resize', fit);
     hud();
+    root.classList.toggle('online', !!g.net);
     intro();
     last = performance.now(); acc = 0;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
@@ -40,6 +44,12 @@
   }
   M.touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   function buildQuarter() {
+    if (g.full) {
+      g.sec = g.ot ? Math.max(60, Math.round(g.qsec / 2)) : g.qsec;
+      g.lastRes = null;
+      g.poss = g.q % 2 ? g.q1 : (g.q1 === 'home' ? 'away' : 'home');
+      return;
+    }
     const n = g.ot ? 2 : g.ppq, fill = (g.ot ? 10 : POSS_Q) - n;
     const steps = [];
     const per = fill / (n * 2);
@@ -68,6 +78,7 @@
   }
   function next() {
     if (!g) return;
+    if (g.full) { if (g.sec <= 0.05) return endQuarter(); return liveFull(); }
     if (g.si >= g.steps.length) return endQuarter();
     const s = g.steps[g.si++];
     if (s.k === 'sim') return simStretch(s.n);
@@ -78,6 +89,7 @@
     g.sec = 0; hud();
     if (g.q >= 4 && g.hs !== g.as) return final();
     if (g.q === 2) return halftime();
+    if (g.full) { g.q++; if (g.q > 4) g.ot++; buildQuarter(); hud(); return banner('<div class="big">' + qName() + '</div>' + (g.ot ? '<div class="sub">OVERTIME</div>' : ''), 1300, next); }
     g.q++; if (g.q > 4) g.ot++;
     buildQuarter();
     banner('<div class="big">' + qName() + '</div>' + (g.ot ? '<div class="sub">OVERTIME</div>' : ''), 1300, next);
@@ -155,18 +167,50 @@
     banner(html, g.tut && g.live < 2 ? 3200 : clutch ? 1500 : 1000, () => {
       g.mode = 'live'; g.live++;
       if (g.live >= 2 && g.tut) { g.tut = false; CK.S.tutDone = true; }
-      const st = E.start({
-        off: Object.assign({ players: lo.st.slice(0, 5) }, M.jersey(offT, offT === g.home)),
-        def: Object.assign({ players: ld.st.slice(0, 5) }, M.jersey(defT, defT === g.home)),
-        user, diff: CK.S.diff, onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
-      });
-      st.ents.forEach(e => { if (g.fire[e.id]) e.fire = true; });
+      startPoss(offT, defT, user, step, {});
       g.clutch = clutch;
     });
   }
-  function say(t) { const el = root.querySelector('#ticker'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
+  // which way a team attacks: home goes right in the first half, left after the break
+  const dirFor = t => ((t === g.home) === (g.q <= 2)) ? 1 : -1;
+  function startPoss(offT, defT, user, step, extra) {
+    const lo = offT === g.home ? g.lineH : g.lineA, ld = defT === g.home ? g.lineH : g.lineA;
+    const st = E.start(Object.assign({
+      off: Object.assign({ players: lo.st.slice(0, 5), home: offT === g.home }, M.jersey(offT, offT === g.home)),
+      def: Object.assign({ players: ld.st.slice(0, 5), home: defT === g.home }, M.jersey(defT, defT === g.home)),
+      user, diff: CK.S.diff, dir: dirFor(offT), both: !!(g.net && !g.netGone),
+      onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
+    }, extra));
+    st.ents.forEach(e => { if (g.fire[e.id]) e.fire = true; });
+    if (g.net) netEv({ k: 'poss' });
+    return st;
+  }
+  // full game: every possession is played, the ball goes straight back the other way
+  function liveFull() {
+    const offT = g.poss === 'home' ? g.home : g.away, defT = offT === g.home ? g.away : g.home;
+    const user = offT === g.me ? 'off' : 'def';
+    const r = g.lastRes, step = { k: user };
+    const extra = { flow: true, clock: g.sec };
+    if (r) {
+      extra.pos = r.pos;
+      if (r.holder && r.holderSide === 1) extra.handler = r.holder;
+      else { extra.inbound = true; if (r.tag !== 'make' && r.ballW && !r.ft) extra.inbAt = r.ballW; }
+    }
+    setButtons(user);
+    const go = () => { g.mode = 'live'; g.live++; startPoss(offT, defT, user, step, extra); };
+    if (!r) {
+      let html = '<div class="big">' + qName() + '</div><div class="sub">' + (user === 'off' ? 'YOUR BALL' : 'THEIR BALL') + '</div>';
+      if (g.tut && g.q === 1) html += '<div class="tip">' + tipText('off') + '<br><br>' + tipText('def') + '</div>';
+      g.mode = 'pre';
+      return banner(html, g.tut && g.q === 1 ? 5200 : 1300, () => { if (g.tut) { g.tut = false; CK.S.tutDone = true; U.save('ck_tut', 1); } go(); }, true);
+    }
+    go();
+  }
+  const tipText = user => !M.touch ? (user === 'off' ? 'OFFENSE: WASD to move. Hold SPACE, let go at the top of the meter. K passes, 1-5 picks a teammate, L is a crossover.' : 'DEFENSE: you guard the ball. SPACE to contest, L to go for the steal.')
+    : user === 'off' ? 'OFFENSE: move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. MOVE breaks ankles.' : 'DEFENSE: you guard the ball. CONTEST jumps at shooters, STEAL pokes at the ball.';
+  function say(t) { if (g && g.net) netEv({ k: 'say', t }); const el = root.querySelector('#ticker'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   function onFx(k) {
-    CK.SFX.play(k);
+    CK.SFX.play(k); if (g && g.net && NET_FX.has(k)) netEv({ k: 'fx', f: k });
     if (k === 'dunk' || k === 'block' || k === 'ankles') g.hype = 1;
     if (k === 'cheer') g.hype = Math.max(g.hype, 0.7);
   }
@@ -184,6 +228,14 @@
         if (g.streak[sc.id] >= 3 && !g.fire[sc.id]) { g.fire[sc.id] = true; flash(sc.pl.ln.toUpperCase() + ' IS ON FIRE'); }
       } else if (shooter && r.tag !== 'make') { g.streak[shooter.id] = 0; if (g.fire[shooter.id]) { delete g.fire[shooter.id]; } }
     }
+    if (g.full) {
+      g.sec = Math.max(0, r.gc); r.ft = E.st && E.st.ftShooter ? true : false;
+      g.lastRes = r; g.poss = g.poss === 'home' ? 'away' : 'home';
+      if (g.q >= 4 && g.sec < 40 && Math.abs(g.hs - g.as) <= 6 && !g.clutchShown) { g.clutchShown = true; flash('CLUTCH TIME'); }
+      hud();
+      if (g.sec <= 0.05) { g.mode = 'between'; setTimeout(next, 600); } else next();
+      return;
+    }
     const used = Math.max(5, 24 - (r.sc || 0));
     g.sec = Math.max(step.clutch ? 2 : 6, g.sec - Math.min(used, g.secPer * 1.6));
     hud();
@@ -195,6 +247,7 @@
   function halftime() {
     g.mode = 'half';
     const rows = topPerformers(g.me, 3);
+    if (g.net) { banner('<div class="big">HALFTIME</div><div class="sub">' + g.away.ab + ' ' + g.as + ' - ' + g.hs + ' ' + g.home.ab + '</div>', 4000, () => { g.q = 3; buildQuarter(); hud(); next(); }); return; }
     overlay('<h2>HALFTIME</h2>' + scoreLine() + '<div class="perf">' + rows + '</div><button class="btn" id="hgo">START Q3</button>', () => {
       root.querySelector('#hgo').onclick = () => { closeOverlay(); g.q = 3; buildQuarter(); banner('<div class="big">Q3</div>', 1000, next); };
     });
@@ -214,6 +267,7 @@
   }
   function finish(res) {
     const S = CK.S;
+    if (g.exhib) return finishExhib(res);
     L.recordBox(res.box);
     // rewards
     const hlCount = res.hl.filter(h => ['dunk', 'oop', 'splash', 'block', 'ankles'].includes(h)).length;
@@ -243,6 +297,16 @@
       });
     CK.SFX.play(res.won ? 'cheer' : 'buzzer');
   }
+  function finishExhib(res) {
+    const both = [g.away, g.home].map(t => { const ps = L.roster(t).map(p => ({ p, b: res.box[p.id] })).filter(x => x.b && x.b.gp && (x.b.pts || x.b.reb || x.b.ast)).sort((a, b) => b.b.pts - a.b.pts).slice(0, 5); return '<div class="lbl">' + t.ab + '</div>' + ps.map(x => '<div class="pr"><span>' + U.esc(L.short(x.p)) + '</span><b>' + x.b.pts + ' PTS</b> ' + x.b.reb + ' REB ' + x.b.ast + ' AST</div>').join(''); }).join('');
+    const html = '<h2 class="' + (res.won ? 'win' : 'loss') + '">' + (res.won ? 'YOU WIN' : 'YOU LOSE') + '</h2>' + scoreLine() + '<div class="perf">' + both + '</div>';
+    if (g.net) { netEv({ k: 'final', html: '<h2 class="' + (!res.won ? 'win' : 'loss') + '">' + (!res.won ? 'YOU WIN' : 'YOU LOSE') + '</h2>' + scoreLine() + '<div class="perf">' + both + '</div>' }); }
+    overlay(html + (g.net ? '' : '<button class="btn" id="fagain">PLAY AGAIN</button>') + '<button class="btn alt" id="fgo">MENU</button>', () => {
+      const ag = root.querySelector('#fagain'); if (ag) ag.onclick = () => { closeOverlay(); M.exit(); g.done && g.done(res, 'again'); };
+      root.querySelector('#fgo').onclick = () => { closeOverlay(); M.exit(); g.done && g.done(res); };
+    });
+    CK.SFX.play(res.won ? 'cheer' : 'buzzer');
+  }
   // sim an entire game without playing
   M.simGame = (opts, done) => {
     const S = CK.S, home = L.T(opts.home), away = L.T(opts.away);
@@ -261,28 +325,36 @@
   function loop(ts) {
     raf = requestAnimationFrame(loop);
     if (!g) return;
-    let dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+    let dt = Math.max(0, Math.min(0.1, (ts - last) / 1000)); last = ts;
     g.hype = Math.max(0, g.hype - dt * 0.5);
+    if (g.guest) return guestFrame(dt);
     if (g.paused) return;
     if (E.st && g.mode === 'live') {
       acc += dt;
       while (acc >= 1 / 60) {
-        // screen stick -> court directions (screen right = toward the hoop)
-        const I = CK.IN, EI = { jx: I.jy, jy: -I.jx, A: I.A, Ap: I.Ap, Ar: I.Ar, Bp: I.Bp, Cp: I.Cp, tap: I.tap, pass: I.pass };
-        E.update(1 / 60, EI); I.consume(); acc -= 1 / 60;
+        // screen stick -> court directions for whichever way this possession attacks
+        const d = E.st.dir || 1, tr = I => ({ jx: d * I.jy, jy: -d * I.jx, A: I.A, Ap: I.Ap, Ar: I.Ar, Bp: I.Bp, Cp: I.Cp, tap: I.tap, pass: I.pass });
+        const I2 = g.net && !g.netGone ? tr(g.net.input()) : null;
+        E.update(1 / 60, tr(CK.IN), I2); CK.IN.consume(); acc -= 1 / 60;
+        if (!E.st || !g) break;
       }
-      if (E.st) { root.querySelector('#sc').textContent = Math.max(0, Math.ceil(E.st.sc)); root.querySelector('#sc').classList.toggle('low', E.st.sc < 5); }
+      if (E.st) {
+        const sc = root.querySelector('#sc'); sc.textContent = Math.max(0, Math.ceil(Math.min(E.st.sc, E.st.gc))); sc.classList.toggle('low', E.st.sc < 5);
+        if (g.full) { const c = root.querySelector('#gclk'); if (c) c.textContent = qName() + ' ' + clk(E.st.gc); }
+      }
     }
-    if (E.st) CK.RD.draw(ctx, { hype: g.hype });
+    if (g.net && E.st) g.net.snap(snapshot());
+    if (E.st) CK.RD.draw(ctx, { hype: g.hype, keepCam: !!(g.full && g.lastRes) });
     else if (g.mode !== 'final') { CK.RD.drawIdle && CK.RD.drawIdle(ctx); }
   }
 
   // ---------- HUD / overlays ----------
-  const logoImg = t => { const l = CK.RD.logo(t); return l ? '<img src="' + l.src + '" alt="">' : CK.S.logos === 'retro' || !t.logo ? '' : '<img src="' + CK.logoUrl(t.logo) + '" alt="" onerror="this.remove()">'; };
+  const logoImg = t => { const l = CK.RD.logo(t); return l ? '<img src="' + l.src + '" alt="">' : (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : '<img src="' + CK.logoUrl(t.logo) + '" alt="" onerror="this.remove()">'; };
+  const clk = s => s >= 60 ? U.clock(s) : (Math.max(0, s)).toFixed(1);
   function hud() {
     const h = root.querySelector('#hud');
     h.innerHTML = '<div class="tm" style="--c:' + g.away.c1 + '">' + logoImg(g.away) + '<i>' + g.away.ab + '</i><b>' + g.as + '</b></div>' +
-      '<div class="mid"><div>' + qName() + ' ' + U.clock(g.sec) + '</div><div class="scw">SHOT <span id="sc">24</span></div></div>' +
+      '<div class="mid"><div id="gclk">' + qName() + ' ' + clk(g.sec) + '</div><div class="scw">SHOT <span id="sc">24</span></div></div>' +
       '<div class="tm r" style="--c:' + g.home.c1 + '"><b>' + g.hs + '</b><i>' + g.home.ab + '</i>' + logoImg(g.home) + '</div>';
   }
   function setButtons(user) {
@@ -293,17 +365,26 @@
   }
   let bTimer = 0;
   function banner(html, ms, then, skippable) {
+    if (g && g.net) netEv({ k: 'ban', html, ms });
     const el = root.querySelector('#banner'); el.innerHTML = html; el.classList.add('on');
     clearTimeout(bTimer);
     const go = () => { clearTimeout(bTimer); el.classList.remove('on'); el.onclick = null; then && then(); then = null; };
     bTimer = setTimeout(go, ms);
     el.onclick = () => { if (skippable || ms > 1400) go(); };
   }
-  function flash(t) { const el = root.querySelector('#flash'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
+  function flash(t) { if (g && g.net) netEv({ k: 'flash', t }); flashLocal(t); }
+  function flashLocal(t) { const el = root.querySelector('#flash'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   function overlay(html, bind) { const el = root.querySelector('#ov'); el.innerHTML = '<div class="card">' + html + '</div>'; el.classList.add('on'); bind && bind(); }
   function closeOverlay() { root.querySelector('#ov').classList.remove('on'); }
   M.pause = () => {
     if (!g || g.mode === 'final' || g.mode === 'half') return;
+    if (g.net || g.guest) {
+      overlay('<h2>LEAVE GAME?</h2><p>The game keeps going while this is open.</p><button class="btn" id="pr">KEEP PLAYING</button><button class="btn alt red" id="pq">LEAVE</button>', () => {
+        root.querySelector('#pr').onclick = closeOverlay;
+        root.querySelector('#pq').onclick = () => { closeOverlay(); const n = g.net || g.gnet; n && n.close(); const d = g.done; M.exit(); d && d(null, 'left'); };
+      });
+      return;
+    }
     g.paused = true;
     overlay('<h2>PAUSED</h2>' + scoreLine() + '<button class="btn" id="pr">RESUME</button><button class="btn alt" id="ps">SIM TO END</button><label class="tg"><input type="checkbox" id="psnd" ' + (CK.SFX.on ? 'checked' : '') + '> SOUND</label>', () => {
       root.querySelector('#pr').onclick = () => { closeOverlay(); g.paused = false; last = performance.now(); };
@@ -311,13 +392,101 @@
       root.querySelector('#ps').onclick = () => {
         closeOverlay(); g.paused = false; E.st = null; clearTimeout(bTimer); root.querySelector('#banner').classList.remove('on');
         // sim what is left of this quarter and the rest
-        const left = g.steps.slice(g.si).reduce((a, s) => a + (s.k === 'sim' ? s.n : 0.5), 0);
+        const left = g.full ? Math.round(g.sec / g.qsec * POSS_Q) : g.steps.slice(g.si).reduce((a, s) => a + (s.k === 'sim' ? s.n : 0.5), 0);
         for (let i = 0; i < left + (4 - Math.min(4, g.q)) * POSS_Q; i++) { g.hs += simPoss(g.home, g.away).pts; g.as += simPoss(g.away, g.home).pts; }
         while (g.hs === g.as) { g.hs += simPoss(g.home, g.away).pts; g.as += simPoss(g.away, g.home).pts; }
         g.q = Math.max(4, g.q); g.sec = 0; hud(); final();
       };
     });
   };
-  M.exit = () => { cancelAnimationFrame(raf); CK.inGame = false; CK.SFX.crowd(false); removeEventListener('resize', fit); root.classList.remove('on'); E.st = null; };
+  M.exit = () => { cancelAnimationFrame(raf); CK.inGame = false; CK.SFX.crowd(false); removeEventListener('resize', fit); root.classList.remove('on', 'online'); E.st = null; if (g && g.net) g.net.close(); if (g && g.gnet) g.gnet.close(); };
+
+  // ---------- online: host side ----------
+  const NET_FX = new Set(['swish', 'rim', 'dunk', 'block', 'steal', 'ankles', 'whistle', 'buzzer', 'cheer']);
+  function netEv(ev) { if (g && g.net && !g.netGone) g.net.event(ev); }
+  const SC = ['run', 'shoot', 'fin', 'jump', 'pass', 'reach', 'ftm'];
+  const r2 = v => Math.round(v * 100) / 100;
+  function snapshot() {
+    const st = E.st, b = st.ball;
+    return {
+      t: r2(st.t), d: st.dir, ph: st.phase, oh: st.cfg.off.home ? 1 : 0, hs: g.hs, as: g.as, q: g.q, ot: g.ot, gc: r2(Math.min(st.gc, g.sec + 1)), sc: Math.ceil(st.sc),
+      e: st.ents.map(e => [e.id, r2(e.x), r2(e.y), r2(e.z), r2(e.vx), r2(e.vy), e.face, SC.indexOf(e.state), (e.fell ? 1 : 0) | (e.hang > 0 ? 2 : 0) | (e.dunk ? 4 : 0) | (e.fire ? 8 : 0) | (e.released ? 16 : 0) | (e.userShot ? 32 : 0), r2(e.run), r2(e.stT), r2(e.win || 0), e.labelT > 0 ? e.label : 0]),
+      b: [b.s, b.s === 'hold' && b.h ? st.ents.indexOf(b.h) : -1, r2(b.x), r2(b.y), r2(b.z)],
+      uo: st.ents.indexOf(st.uo), ud: st.ents.indexOf(st.ud),
+      pops: st.pops.map(p => [p.text, p.y, p.col, p.s, r2(p.t), p.life]), sh: r2(st.shake), rim: st.rimT > 0 ? 1 : 0, net: st.netT > 0 ? 1 : 0,
+      ft: st.phase === 'ft' ? [st.ftState, r2(st.ftM || 0)] : 0, res: st.result ? st.result.tag : 0
+    };
+  }
+  M.startData = (home, away) => {
+    const pl = p => ({ id: p.id, fn: p.fn, ln: p.ln, pos: p.pos, ht: p.ht, num: p.num, skin: p.skin, hair: p.hair, hc: p.hc });
+    const tm = t => ({ ab: t.ab, city: t.city, c1: t.c1, c2: t.c2, name: t.name, logo: t.logo, w: 0, l: 0 });
+    return { home: tm(home), away: tm(away), hp: L.lineup(home).st.slice(0, 5).map(pl), ap: L.lineup(away).st.slice(0, 5).map(pl) };
+  };
+
+  // ---------- online: guest side (draws the host's game, sends controls) ----------
+  M.watch = (G, data, guestIsHome, done) => {
+    const home = data.home, away = data.away;
+    const players = {}; data.hp.concat(data.ap).forEach(p => players[p.id] = Object.assign({ r: { sht: 5, ins: 5, pas: 5, def: 5, ath: 5 } }, p));
+    const homeIds = new Set(data.hp.map(p => p.id));
+    g = { guest: true, gnet: G, home, away, me: guestIsHome ? home : away, opp: guestIsHome ? away : home, meHome: guestIsHome, hs: 0, as: 0, q: 1, ot: 0, sec: 0, hype: 0, mode: 'live', done, ents: {}, players, homeIds, view: null };
+    E.st = null; root = document.getElementById('game'); root.classList.add('on', 'online');
+    canvas = root.querySelector('canvas'); ctx = canvas.getContext('2d'); canvas.width = E.W; canvas.height = E.H;
+    CK.RD.buildCourt(home, away);
+    CK.inGame = true; CK.IN.reset(); CK.SFX.crowd(true);
+    fit(); addEventListener('resize', fit); hud();
+    G.onEvent = ev => {
+      if (!g || !g.guest) return;
+      if (ev.k === 'ban') bannerLocal(ev.html, ev.ms);
+      else if (ev.k === 'say') sayLocal(ev.t);
+      else if (ev.k === 'fx') { CK.SFX.play(ev.f); if (ev.f === 'dunk' || ev.f === 'block' || ev.f === 'ankles') g.hype = 1; }
+      else if (ev.k === 'flash') flashLocal(ev.t);
+      else if (ev.k === 'final') { g.mode = 'final'; overlay(ev.html + '<button class="btn alt" id="fgo">MENU</button>', () => { root.querySelector('#fgo').onclick = () => { closeOverlay(); M.exit(); done && done(); }; }); }
+    };
+    G.onGone = () => { if (g && g.guest && g.mode !== 'final') overlay('<h2>GAME OVER</h2><p>Your friend left the game.</p><button class="btn alt" id="fgo">MENU</button>', () => { root.querySelector('#fgo').onclick = () => { closeOverlay(); M.exit(); done && done(); }; }); };
+    last = performance.now();
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+  };
+  function guestFrame(dt) {
+    const G = g.gnet, s = G.snap;
+    g.hype = Math.max(0, g.hype - dt * 0.5);
+    G.send(CK.IN); CK.IN.consume();
+    if (!s) { CK.RD.drawIdle(ctx); return; }
+    // build / update a stand-in engine state the renderer can draw
+    const offHome = !!s.oh, mySide = (offHome === g.meHome) ? 'off' : 'def';
+    let st = g.view;
+    if (!st || st.dir !== s.d || st.offHome !== offHome || st.poss !== s.e[0][0] + s.e[5][0]) {
+      const ents = s.e.map((a, i) => {
+        const side = i < 5 ? 0 : 1, pl = g.players[a[0]] || { id: a[0], ln: '?', ht: 78, num: 0, skin: 2, hair: 0, hc: 0, r: {} };
+        return { id: a[0], pl, side, i: i % 5, ht: pl.ht, x: a[1], y: a[2], z: a[3], vx: 0, vy: 0, face: 1, run: 0, state: 'run', stT: 0 };
+      });
+      st = g.view = { cfg: { off: M.jersey(offHome ? g.home : g.away, offHome), def: M.jersey(offHome ? g.away : g.home, !offHome), user: mySide }, dir: s.d, offHome, poss: s.e[0][0] + s.e[5][0], ents, ball: { s: 'hold', x: 0, y: 0, z: 0 }, pops: [], parts: [], t: 0, shake: 0, camInit: false };
+      setButtons(mySide);
+    }
+    st.t = s.t; st.phase = s.ph; st.shake = s.sh; st.rimT = s.rim ? 0.2 : 0; st.netT = s.net ? 0.3 : 0;
+    st.result = s.res ? { tag: s.res } : null;
+    const k = Math.min(1, dt * 14);
+    s.e.forEach((a, i) => {
+      const e = st.ents[i];
+      e.x += (a[1] - e.x) * k; e.y += (a[2] - e.y) * k; e.z = a[3]; e.vx = a[4]; e.vy = a[5]; e.face = a[6]; e.state = SC[a[7]] || 'run';
+      e.fell = !!(a[8] & 1); e.hang = a[8] & 2 ? 0.1 : 0; e.dunk = !!(a[8] & 4); e.fire = !!(a[8] & 8); e.released = !!(a[8] & 16);
+      e.run = a[9]; e.stT = a[10]; e.win = a[11]; e.label = a[12] || null; e.labelT = a[12] ? 0.5 : 0; e.ball = false;
+    });
+    const mine = mySide === 'off' ? s.uo : s.ud;
+    st.user = mine >= 0 ? st.ents[mine] : null;
+    st.ents.forEach(e => e.userShot = false);
+    if (st.user && (s.e[mine][8] & 32)) st.user.userShot = true;
+    const b = st.ball; b.s = s.b[0]; b.h = s.b[1] >= 0 ? st.ents[s.b[1]] : null; if (b.h) b.h.ball = true;
+    b.x += (s.b[2] - b.x) * (b.s === 'shot' ? 1 : k); b.y += (s.b[3] - b.y) * (b.s === 'shot' ? 1 : k); b.z = s.b[4];
+    st.pops = s.pops.map(p => ({ text: p[0], y: p[1], col: p[2], s: p[3], t: p[4], life: p[5] }));
+    if (s.ft) { st.ftState = s.ft[0]; st.ftM = s.ft[1]; } else st.ftState = null;
+    st.ftMine = mySide === 'off';
+    if (g.hs !== s.hs || g.as !== s.as || g.q !== s.q) { g.hs = s.hs; g.as = s.as; g.q = s.q; g.ot = s.ot; g.sec = s.gc; hud(); }
+    const c = root.querySelector('#gclk'); if (c) c.textContent = qName() + ' ' + clk(s.gc);
+    const sc = root.querySelector('#sc'); if (sc) sc.textContent = Math.max(0, Math.min(s.sc, Math.ceil(s.gc)));
+    E.st = st; CK.RD.draw(ctx, { hype: g.hype });
+    if (performance.now() - G.snapT > 8000 && g.mode !== 'final' && !g.lostShown) { g.lostShown = true; flashLocal('WAITING FOR CONNECTION...'); }
+  }
+  function bannerLocal(html, ms) { const el = root.querySelector('#banner'); el.innerHTML = html; el.classList.add('on'); clearTimeout(bTimer); bTimer = setTimeout(() => el.classList.remove('on'), ms); }
+  function sayLocal(t) { const el = root.querySelector('#ticker'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   M.g = () => g;
 })(window.CK);

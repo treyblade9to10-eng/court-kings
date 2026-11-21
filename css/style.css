@@ -333,3 +333,18 @@ img.hd { width: 54px; height: 54px; filter: drop-shadow(2px 2px 0 rgba(0,0,0,.6)
   .bigt { min-width: 180px; }
   .bigt .big { width: 96px; height: 96px; }
 }
+
+/* ---------- v2.1: play now / online ---------- */
+.slots { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 12px 0 4px; }
+.slots em { font-style: normal; font-family: 'P2'; color: var(--o); font-size: 14px; }
+.slot { position: relative; width: 150px; min-height: 130px; background: var(--c); box-shadow: 0 0 0 3px #000, 0 0 0 6px var(--edge); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 6px 22px; cursor: pointer; }
+.slot.on { box-shadow: 0 0 0 3px #000, 0 0 0 6px var(--y); }
+.slot .big { width: 64px; height: 64px; filter: drop-shadow(2px 2px 0 rgba(0,0,0,.6)); }
+.slot b { font-family: 'P2'; font-size: 16px; color: #fff; text-shadow: 2px 2px 0 #000; margin-top: 4px; }
+.slot span { font-family: 'P2'; font-size: 7px; color: #fff; margin-top: 4px; text-shadow: 1px 1px 0 #000; text-align: center; }
+.slot i { position: absolute; bottom: 0; left: 0; right: 0; font-style: normal; font-family: 'P2'; font-size: 8px; background: #000; color: var(--y); padding: 4px 0 3px; text-align: center; }
+.page.center { text-align: center; }
+.code { font-family: 'P2'; font-size: 46px; color: var(--y); letter-spacing: 10px; margin: 20px 0; text-shadow: 4px 4px 0 #b4410f, 7px 7px 0 #000; }
+.wait { font-family: 'P2'; font-size: 10px; color: var(--dim); margin: 20px 0; }
+.wait span { animation: blink 1s steps(2) infinite; }
+#game.online #pauseBtn { width: auto; padding: 0 8px; }

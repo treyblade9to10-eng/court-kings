@@ -16,125 +16,150 @@
     return null;
   };
 
-  // ---------- static arena + court ----------
+  // ---------- static arena + full court (built once into a wide canvas) ----------
+  const K = E.K, OX = 352, BGW = 790;   // bg pixel = world screen x + OX
+  const pB = (X, Y, z) => [K.BX - Y * K.KY + X * K.SK + OX, K.YM + X * K.KX - (z || 0) * K.ZS];
+  const unB = (px, sy) => { const X = (sy - K.YM) / K.KX; return [X, (K.BX + X * K.SK + OX - px) / K.KY]; };
+  const CAM_MIN = -OX + 2, CAM_MAX = BGW - OX - W - 2;
   R.buildCourt = (home, away) => {
     teams = { home, away };
-    bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+    bg = document.createElement('canvas'); bg.width = BGW; bg.height = H;
     const g = bg.getContext('2d');
     g.imageSmoothingEnabled = false;
-    g.fillStyle = '#0b0d1a'; g.fillRect(0, 0, W, H);
-    // stands back wall
-    const [, farY] = proj(-25, 20); const [, nearY] = proj(25, 20);
-    g.fillStyle = '#121633'; g.fillRect(0, 0, W, farY - 6);
-    for (let y = 0; y < farY - 14; y += 5) { g.fillStyle = (y / 5) % 2 ? '#171c3e' : '#141936'; g.fillRect(0, y, W, 5); }
-    // floor (wood + colored apron)
+    g.fillStyle = '#0b0d1a'; g.fillRect(0, 0, BGW, H);
+    const [, farY] = pB(-25, 47); const [, nearY] = pB(25, 47);
+    g.fillStyle = '#121633'; g.fillRect(0, 0, BGW, farY - 6);
+    for (let y = 0; y < farY - 14; y += 5) { g.fillStyle = (y / 5) % 2 ? '#171c3e' : '#141936'; g.fillRect(0, y, BGW, 5); }
+    // floor: wood inside, team-color apron outside
     const apron = U.shade(home.c1, -0.15);
-    for (let sy = Math.floor(farY - 12); sy < H; sy++) for (let sx = 0; sx < W; sx++) {
-      const [x, y] = E.unproj(sx, sy);
+    const img = g.getImageData(0, 0, BGW, H), D = img.data, [ar, ag, ab] = (() => { const c = document.createElement('canvas').getContext('2d'); c.fillStyle = apron; c.fillRect(0, 0, 1, 1); return c.getImageData(0, 0, 1, 1).data; })();
+    for (let sy = Math.floor(farY - 12); sy < H; sy++) for (let px = 0; px < BGW; px++) {
+      const [x, y] = unB(px, sy);
       if (x < -28 || x > 30) continue;
-      const out = Math.abs(x) > 25 || y < 0 || y > 47;
-      if (out && (Math.abs(x) > 26.5 || y < -3)) { g.fillStyle = apron; g.fillRect(sx, sy, 1, 1); continue; }
+      const i = (sy * BGW + px) * 4;
+      const out = Math.abs(x) > 25 || y < 0 || y > 94;
+      if (out && (Math.abs(x) > 26.5 || y < -3 || y > 97)) { D[i] = ar; D[i + 1] = ag; D[i + 2] = ab; D[i + 3] = 255; continue; }
       const plank = Math.floor((x + 40) / 0.9), seam = Math.floor((y + plank * 5.7) / 8);
-      const v = ((plank * 37 + seam * 13) % 7) * 0.018 + ((sx + sy * 3) % 11 === 0 ? -0.04 : 0);
+      const v = ((plank * 37 + seam * 13) % 7) * 0.018 + ((px + sy * 3) % 11 === 0 ? -0.04 : 0);
       const k = 0.9 + v - (out ? 0.1 : 0);
-      g.fillStyle = 'rgb(' + (214 * k | 0) + ',' + (152 * k | 0) + ',' + (92 * k | 0) + ')'; g.fillRect(sx, sy, 1, 1);
+      D[i] = 214 * k; D[i + 1] = 152 * k; D[i + 2] = 92 * k; D[i + 3] = 255;
     }
-    // paint
-    polyFill(g, [[-8, 0], [8, 0], [8, 19], [-8, 19]], home.c1, 0.88);
-    polyFill(g, [[-25, 0], [25, 0], [25, -3], [-25, -3]], home.c1, 0.5);
-    // lines
-    g.fillStyle = '#f6f1e7';
-    const L = (a, b) => seg(g, a, b);
-    L([-25, 0], [25, 0]); L([-25, 0], [-25, 47]); L([25, 0], [25, 47]); L([-25, 47], [25, 47]);
-    L([-8, 0], [-8, 19]); L([8, 0], [8, 19]); L([-8, 19], [8, 19]);
-    L([-6, 0], [-6, 19]); L([6, 0], [6, 19]);
-    arc(g, 0, 19, 6, 0, Math.PI, '#f6f1e7');
-    arc(g, 0, 19, 6, Math.PI, Math.PI * 2, 'rgba(246,241,231,0.5)', true);
-    g.fillStyle = '#f6f1e7'; L([-22, 0], [-22, 14]); L([22, 0], [22, 14]);
-    arc(g, 0, 5.25, 23.75, Math.atan2(8.75, 22), Math.atan2(8.75, -22), '#f6f1e7');
-    arc(g, 0, 5.25, 4, 0, Math.PI, 'rgba(246,241,231,0.8)');
-    arc(g, 0, 47, 6, Math.PI, Math.PI * 2, '#f6f1e7'); arc(g, 0, 47, 6, 0, Math.PI, '#f6f1e7');
-    // half court logo (or team letters)
+    g.putImageData(img, 0, 0);
+    // both ends: paint, lines, arcs (end 0 = right hoop at Y 5.25, end 1 = left hoop at Y 88.75)
+    const M = (X, Y, e) => e ? [-X, 94 - Y] : [X, Y];
+    const LC = '#f6f1e7';
+    for (const e of [0, 1]) {
+      polyFill(g, [[-8, 0], [8, 0], [8, 19], [-8, 19]].map(p => M(p[0], p[1], e)), home.c1, 0.85);
+      polyFill(g, [[-25, 0], [25, 0], [25, -3], [-25, -3]].map(p => M(p[0], p[1], e)), home.c1, 0.5);
+      g.fillStyle = LC;
+      const Ls = (a, b) => seg(g, M(a[0], a[1], e), M(b[0], b[1], e));
+      Ls([-8, 0], [-8, 19]); Ls([8, 0], [8, 19]); Ls([-8, 19], [8, 19]); Ls([-6, 0], [-6, 19]); Ls([6, 0], [6, 19]);
+      Ls([-22, 0], [-22, 14]); Ls([22, 0], [22, 14]);
+      const A = (cx, cy, r, a0, a1, col, dash) => { g.fillStyle = col; const n = Math.ceil(r * Math.abs(a1 - a0) * 8); for (let i = 0; i <= n; i++) { if (dash && (i >> 3) % 2) continue; const a = U.lerp(a0, a1, i / n); const [X, Y] = M(cx + Math.cos(a) * r, cy + Math.sin(a) * r, e); const [px, py] = pB(X, Y); g.fillRect(Math.round(px), Math.round(py), 1, 1); } };
+      A(0, 19, 6, 0, Math.PI, LC); A(0, 19, 6, Math.PI, Math.PI * 2, 'rgba(246,241,231,0.5)', true);
+      A(0, 5.25, 23.75, Math.atan2(8.75, 22), Math.atan2(8.75, -22), LC);
+      A(0, 5.25, 4, 0, Math.PI, 'rgba(246,241,231,0.8)');
+    }
+    g.fillStyle = LC;
+    seg(g, [-25, 0], [25, 0]); seg(g, [-25, 94], [25, 94]); seg(g, [-25, 0], [-25, 94]); seg(g, [25, 0], [25, 94]); seg(g, [-25, 47], [25, 47]);
+    arc(g, 0, 47, 6, 0, Math.PI * 2, LC); arc(g, 0, 47, 2, 0, Math.PI * 2, LC);
+    // center logo
     const lg = R.logo(home, () => { if (teams && teams.home === home) R.buildCourt(home, away); });
-    const [cx, cy] = proj(0, 47);
-    if (lg) { g.globalAlpha = 0.9; g.drawImage(lg, Math.round(cx - 22), Math.round(cy - 14), 44, 28); g.globalAlpha = 1; }
+    const [cx, cy] = pB(0, 47);
+    if (lg) { g.globalAlpha = 0.92; g.drawImage(lg, Math.round(cx - 24), Math.round(cy - 15), 48, 30); g.globalAlpha = 1; }
     else { g.fillStyle = home.c1; g.beginPath(); g.ellipse(cx, cy, 18, 9, 0, 0, 7); g.fill(); U.pixText(g, home.ab, Math.round(cx - U.pixW(home.ab, 2) / 2), Math.round(cy - 5), '#fff', 2); }
-    // baseline name painted in the apron behind the hoop (vertical strip on the right)
     // scorer's table along the near sideline
     const tY = Math.round(nearY + 7);
-    g.fillStyle = '#05060c'; g.fillRect(0, tY, W, H - tY);
-    g.fillStyle = home.c1; g.fillRect(0, tY, W, 2);
-    g.fillStyle = '#0f1430'; g.fillRect(90, tY + 3, 220, H - tY - 3);
-    g.fillStyle = home.c2; g.fillRect(90, tY + 3, 220, 1);
+    g.fillStyle = '#05060c'; g.fillRect(0, tY, BGW, H - tY);
+    g.fillStyle = home.c1; g.fillRect(0, tY, BGW, 2);
+    const tx0 = Math.round(cx - 110);
+    g.fillStyle = '#0f1430'; g.fillRect(tx0, tY + 3, 220, H - tY - 3);
+    g.fillStyle = home.c2; g.fillRect(tx0, tY + 3, 220, 1);
     const nm = (home.city + ' ' + (home.name || '')).toUpperCase();
-    U.pixText(g, nm, Math.round(200 - U.pixW(nm) / 2), tY + 4, '#fff');
-    if (lg) { g.drawImage(lg, 96, tY + 3, 11, 11); g.drawImage(lg, 293, tY + 3, 11, 11); }
-    // LED board above far sideline
+    U.pixText(g, nm, Math.round(cx - U.pixW(nm) / 2), tY + 4, '#fff');
+    if (lg) { g.drawImage(lg, tx0 + 6, tY + 3, 11, 11); g.drawImage(lg, tx0 + 203, tY + 3, 11, 11); }
+    // LED board above the far sideline
     const bY = Math.round(farY - 13);
-    g.fillStyle = '#000'; g.fillRect(0, bY, W, 7);
-    for (let x = 0; x < W; x += 80) { g.fillStyle = home.c1; g.fillRect(x, bY + 1, 78, 5); U.pixText(g, ((home.name || home.city) + '').toUpperCase().slice(0, 18), x + 4, bY + 1, '#fff'); }
-    // crowd sprites
+    g.fillStyle = '#000'; g.fillRect(0, bY, BGW, 7);
+    for (let x = 0; x < BGW; x += 80) { const t = x % 160 ? away : home; g.fillStyle = t.c1; g.fillRect(x, bY + 1, 78, 5); U.pixText(g, ((t.name || t.city) + '').toUpperCase().slice(0, 18), x + 4, bY + 1, '#fff'); }
+    // crowd sprites (bg pixel coords)
     crowd = [];
     const cols = [home.c1, home.c2, '#fff', '#e8e8e8', home.c1, '#333', '#ffd23f', away.c1];
-    for (let row = 0; row * 5 + 4 < bY - 2; row++) for (let x = 2 + (row % 2) * 3; x < W - 2; x += 6) if (Math.random() < 0.9) crowd.push({ x, y: row * 5 + 3, c: U.pick(cols), s: CK.SKIN[U.irand(0, 5)], ph: Math.random() * 6 });
-    for (let x = 3; x < 88; x += 6) crowd.push({ x, y: tY + 9 + (x % 12 ? 0 : 2), c: U.pick(cols), s: CK.SKIN[U.irand(0, 5)], ph: Math.random() * 6, front: true });
-    for (let x = 316; x < W - 2; x += 6) crowd.push({ x, y: tY + 9 + (x % 12 ? 0 : 2), c: U.pick(cols), s: CK.SKIN[U.irand(0, 5)], ph: Math.random() * 6, front: true });
+    for (let row = 0; row * 5 + 4 < bY - 2; row++) for (let x = 2 + (row % 2) * 3; x < BGW - 2; x += 6) if (Math.random() < 0.9) crowd.push({ x, y: row * 5 + 3, c: U.pick(cols), s: CK.SKIN[U.irand(0, 5)], ph: Math.random() * 6 });
+    for (let x = 3; x < BGW - 2; x += 6) if (x < tx0 - 4 || x > tx0 + 224) crowd.push({ x, y: tY + 9 + (x % 12 ? 0 : 2), c: U.pick(cols), s: CK.SKIN[U.irand(0, 5)], ph: Math.random() * 6, front: true });
   };
   function seg(g, a, b) {
     const n = Math.ceil(Math.hypot(a[0] - b[0], a[1] - b[1]) * 8);
-    for (let i = 0; i <= n; i++) { const t = i / n; const [x, y] = proj(U.lerp(a[0], b[0], t), U.lerp(a[1], b[1], t)); g.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i <= n; i++) { const t = i / n; const [x, y] = pB(U.lerp(a[0], b[0], t), U.lerp(a[1], b[1], t)); g.fillRect(Math.round(x), Math.round(y), 1, 1); }
   }
   function arc(g, cx, cy, r, a0, a1, col, dash) {
     g.fillStyle = col; const n = Math.ceil(r * Math.abs(a1 - a0) * 8);
-    for (let i = 0; i <= n; i++) { if (dash && (i >> 3) % 2) continue; const a = U.lerp(a0, a1, i / n); const [x, y] = proj(cx + Math.cos(a) * r, cy + Math.sin(a) * r); g.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i <= n; i++) { if (dash && (i >> 3) % 2) continue; const a = U.lerp(a0, a1, i / n); const [x, y] = pB(cx + Math.cos(a) * r, cy + Math.sin(a) * r); g.fillRect(Math.round(x), Math.round(y), 1, 1); }
   }
   function polyFill(g, pts, col, alpha) {
     g.save(); g.globalAlpha = alpha; g.fillStyle = col; g.beginPath();
-    pts.forEach((p, i) => { const [x, y] = proj(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    pts.forEach((p, i) => { const [x, y] = pB(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
     g.closePath(); g.fill(); g.restore();
   }
+  function drawCrowd(ctx, t, hype) {
+    const ox = -OX - Math.round(E.cam);
+    crowd.forEach(c => {
+      const x = c.x + ox; if (x < -4 || x > W + 4) return;
+      const bob = Math.max(0, Math.sin(t * (3 + hype * 6) + c.ph)) * (0.5 + hype * 2);
+      const y = Math.round(c.y - bob);
+      ctx.fillStyle = c.c; ctx.fillRect(x - 2, y + 2, 5, 3);
+      ctx.fillStyle = c.s; ctx.fillRect(x - 1, y - 1, 3, 3);
+      if (hype > 0.5 && (c.ph * 10 | 0) % 3 === 0) { ctx.fillRect(x - 3, y - 3, 1, 3); ctx.fillRect(x + 3, y - 3, 1, 3); }
+    });
+  }
+  // camera follows the ball, leaning toward the basket being attacked
+  R.camTo = (st, snap) => {
+    const b = st.ball, d = st.dir || 1;
+    const [bx] = E.proj(b.x, b.y, 0);
+    const target = U.clamp(bx + E.cam - W / 2 + 60 * d, CAM_MIN, CAM_MAX);
+    E.cam = snap ? target : E.cam + (target - E.cam) * 0.08;
+  };
   R.drawIdle = ctx => {
-    if (!bg) return; ctx.imageSmoothingEnabled = false; ctx.drawImage(bg, 0, 0);
-    const t = performance.now() / 1000;
-    crowd.forEach(c => { const y = Math.round(c.y - Math.max(0, Math.sin(t * 3 + c.ph)) * 0.5); ctx.fillStyle = c.c; ctx.fillRect(c.x - 2, y + 2, 5, 3); ctx.fillStyle = c.s; ctx.fillRect(c.x - 1, y - 1, 3, 3); });
+    if (!bg) return; ctx.imageSmoothingEnabled = false; ctx.drawImage(bg, -OX - Math.round(E.cam), 0);
+    drawCrowd(ctx, performance.now() / 1000, 0);
   };
 
   // ---------- frame ----------
   R.draw = (ctx, info) => {
     const st = E.st; if (!st || !bg) return;
+    if (!st.camInit) { st.camInit = true; R.camTo(st, !(info && info.keepCam)); } else R.camTo(st);
     ctx.imageSmoothingEnabled = false;
     ctx.save();
     if (st.shake > 0) ctx.translate(Math.round(U.rand(-1, 1) * st.shake * 3), Math.round(U.rand(-1, 1) * st.shake * 2));
-    ctx.drawImage(bg, 0, 0);
+    ctx.drawImage(bg, -OX - Math.round(E.cam), 0);
     const hype = info && info.hype || 0;
-    crowd.forEach(c => {
-      const bob = Math.max(0, Math.sin(st.t * (3 + hype * 6) + c.ph)) * (0.5 + hype * 2);
-      const y = Math.round(c.y - bob);
-      ctx.fillStyle = c.c; ctx.fillRect(c.x - 2, y + 2, 5, 3);
-      ctx.fillStyle = c.s; ctx.fillRect(c.x - 1, y - 1, 3, 3);
-      if (hype > 0.5 && (c.ph * 10 | 0) % 3 === 0) { ctx.fillRect(c.x - 3, y - 3, 1, 3); ctx.fillRect(c.x + 3, y - 3, 1, 3); }
-    });
-    hoopBack(ctx, st);
+    drawCrowd(ctx, st.t, hype);
+    const act = (st.dir || 1) > 0 ? 0 : 1;   // which end the offense attacks
+    hoopBack(ctx, st, 0, act === 0); hoopBack(ctx, st, 1, act === 1);
     st.ents.forEach(e => shadow(ctx, e.x, e.y, e.z, 6));
     const b = st.ball;
     if (!(b.s === 'hold' && b.h)) shadow(ctx, b.x, b.y, b.z, 2);
     rings(ctx, st);
-    // depth sort by court x (screen depth)
-    const list = st.ents.map(e => ({ k: e.x, e }));
+    // depth sort by screen depth (world X)
+    const d = st.dir || 1;
+    const list = st.ents.map(e => ({ k: e.x * d, e }));
     const ballFree = !(b.s === 'hold' && b.h);
-    if (ballFree) list.push({ k: (b.s === 'shot' || b.s === 'net') && b.z > 6 ? Math.max(b.x, 0.3) : b.x + 0.05, ball: true });
+    if (ballFree) list.push({ k: ((b.s === 'shot' || b.s === 'net') && b.z > 6 ? Math.max(b.x, 0.3) : b.x + 0.05) * d, ball: true });
     list.sort((a, c) => a.k - c.k);
-    // ball trail on shots
     if (b.s === 'shot') { st.trail = st.trail || []; st.trail.push([b.x, b.y, b.z]); if (st.trail.length > 7) st.trail.shift(); } else st.trail = [];
     (st.trail || []).forEach((p, i) => { const [x, y] = proj(p[0], p[1], p[2]); ctx.fillStyle = 'rgba(255,190,90,' + (i / 14) + ')'; ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); });
     list.forEach(o => o.ball ? ball(ctx, b.x, b.y, b.z) : player(ctx, o.e, st));
-    hoopFront(ctx, st);
+    hoopFront(ctx, st, 0, act === 0); hoopFront(ctx, st, 1, act === 1);
+    if (st.rimT > 0) st.rimT -= 1 / 60; if (st.netT > 0) st.netT -= 1 / 60;
     st.parts.forEach(p => { const [x, y] = proj(p.x, p.y, p.z); ctx.fillStyle = p.c; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); });
-    const sh = st.ents.find(e => e.state === 'shoot' && e.userShot && !e.released);
+    const sh = st.ents.find(e => e.state === 'shoot' && e.userShot && !e.released && (!st.both || e === st.user));
     if (sh) meter(ctx, sh);
-    if (st.phase === 'ft' && st.ftState === 'meter' && st.cfg.user === 'off') ftMeter(ctx, st);
+    if (st.phase === 'ft' && st.ftState === 'meter' && (st.cfg.user === 'off' || st.ftMine)) ftMeter(ctx, st);
     st.ents.forEach(e => { if (e.labelT > 0 && e.label) { const [x, y] = proj(e.x, e.y, e.z); const col = e.label === 'PERFECT' ? '#3dff6a' : e.label === 'GOOD' ? '#ffd23f' : '#ff7070'; const w = U.pixW(e.label); U.pixText(ctx, e.label, Math.round(x - w / 2) + 1, Math.round(y - 44) + 1, '#000'); U.pixText(ctx, e.label, Math.round(x - w / 2), Math.round(y - 44), col); } });
     ctx.restore();
+    // off-screen arrow for the player you control
+    const u = st.user;
+    if (u) { const [ux, uy] = proj(u.x, u.y, 0); if (ux < 4 || ux > W - 4) { const ax = ux < 4 ? 4 : W - 8; ctx.fillStyle = '#ffd23f'; for (let i = 0; i < 4; i++) ctx.fillRect(ax + (ux < 4 ? i : 3 - i), Math.round(uy) - 12 - i, 1, i * 2 + 1); } }
     st.pops.forEach(p => {
       const k = p.t / p.life, s = p.s + 1, w = U.pixW(p.text, s);
       const y = 78 + p.y * 0.5 - Math.min(1, p.t * 6) * 8 - k * 5;
@@ -155,10 +180,8 @@
     const u = st.user;
     if (u) { const [x, y] = proj(u.x, u.y, 0); ring(ctx, x, y, 8, '#ffd23f'); }
     if (st.cfg.user === 'off' && st.ball.s === 'hold' && st.ball.h.side === 0 && st.phase === 'live') {
-      let n = 1;
       st.ents.forEach(e => {
-        if (e.side !== 0) return;
-        if (e.ball) return;
+        if (e.side !== 0 || e.ball) return;
         const o = E.openness(e); const [x, y] = proj(e.x, e.y, 0);
         ring(ctx, x, y, 6, o > 5.5 ? '#3dff6a' : o > 3.2 ? '#ffd23f' : '#ff4d4d');
       });
@@ -178,28 +201,28 @@
     ctx.fillStyle = '#ffb067'; ctx.fillRect(X, Y, 1, 1);
   }
 
-  // hoop pieces: stanchion + backboard + back rim, then front rim + net over players
-  function hoopBack(ctx, st) {
-    const P = (x, y, z) => proj(x, y, z).map(Math.round);
+  // hoops in world coords. end 0 = right basket, end 1 = left basket (mirrored)
+  const HW = (end, X, Y, z) => { const p = end ? E.projW(-X, 94 - Y, z) : E.projW(X, Y, z); return [Math.round(p[0]), Math.round(p[1])]; };
+  function hoopBack(ctx, st, end, active) {
+    const P = (x, y, z) => HW(end, x, y, z);
     const [px, py] = P(0, -4, 0), [ax, ay] = P(0, -4, 12.5), [bx, by] = P(0, 3.6, 12.2);
+    if (px < -40 || px > W + 40) return;
     ctx.fillStyle = '#0b0b12'; ctx.fillRect(px - 3, ay - 1, 7, py - ay + 3);
     ctx.fillStyle = '#3a4060'; ctx.fillRect(px - 2, ay, 5, py - ay);
     ctx.fillStyle = '#566087'; ctx.fillRect(px - 2, ay, 1, py - ay);
-    ctx.fillStyle = '#1c2135'; ctx.fillRect(px - 7, py - 3, 15, 5); // base pad
+    ctx.fillStyle = '#1c2135'; ctx.fillRect(px - 7, py - 3, 15, 5);
     ctx.fillStyle = teams.home.c1; ctx.fillRect(px - 6, py - 2, 13, 3);
-    ctx.fillStyle = '#3a4060'; ctx.fillRect(bx, by, ax - bx, 2);  // arm
-    // backboard: plane at y=4 spanning x -3..3, z 9.5..13.5
+    ctx.fillStyle = '#3a4060'; ctx.fillRect(Math.min(ax, bx), by, Math.abs(ax - bx), 2);
     const c = [P(-3, 4, 13.5), P(3, 4, 13.5), P(3, 4, 9.5), P(-3, 4, 9.5)];
     ctx.fillStyle = 'rgba(210,235,255,0.55)'; ctx.beginPath(); c.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.beginPath(); c.forEach((p, i) => i ? ctx.lineTo(p[0] + 0.5, p[1] + 0.5) : ctx.moveTo(p[0] + 0.5, p[1] + 0.5)); ctx.closePath(); ctx.stroke();
     const s = [P(-1, 4, 11.5), P(1, 4, 11.5), P(1, 4, 10), P(-1, 4, 10)];
     ctx.beginPath(); s.forEach((p, i) => i ? ctx.lineTo(p[0] + 0.5, p[1] + 0.5) : ctx.moveTo(p[0] + 0.5, p[1] + 0.5)); ctx.stroke();
-    // back half of rim
-    rim(ctx, st, true);
+    rim(ctx, st, end, active, true);
   }
-  function rim(ctx, st, back) {
-    const [rx, ry] = proj(0, 5.25, 10); const X = Math.round(rx), Y = Math.round(ry);
-    const sh = st.rimT > 0 ? ((st.t * 40) | 0) % 2 : 0;
+  function rim(ctx, st, end, active, back) {
+    const [X, Y] = HW(end, 0, 5.25, 10);
+    const sh = active && st.rimT > 0 ? ((st.t * 40) | 0) % 2 : 0;
     ctx.fillStyle = back ? '#a8380f' : '#ff5a1f';
     for (let a = 0; a < 64; a++) {
       const t = a / 64 * Math.PI * 2, s = Math.sin(t);
@@ -207,17 +230,17 @@
       ctx.fillRect(Math.round(X + Math.cos(t) * 5.5), Math.round(Y + s * 2.2) + sh, 1, 1);
     }
   }
-  function hoopFront(ctx, st) {
-    if (st.rimT > 0) st.rimT -= 1 / 60;
-    const [rx, ry] = proj(0, 5.25, 10); const X = Math.round(rx), Y = Math.round(ry);
-    const sw = st.netT > 0 ? Math.sin(st.t * 30) * 1.2 : 0; if (st.netT > 0) st.netT -= 1 / 60;
+  function hoopFront(ctx, st, end, active) {
+    const [X, Y] = HW(end, 0, 5.25, 10);
+    if (X < -20 || X > W + 20) return;
+    const sw = active && st.netT > 0 ? Math.sin(st.t * 30) * 1.2 : 0;
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     for (let i = 0; i < 8; i++) {
       const w = 5.5 - i * 0.35, yy = Y + 2 + i;
       for (let k = -1; k <= 1; k += 2) ctx.fillRect(Math.round(X + k * w + sw * i / 8), yy, 1, 1);
       if (i % 2) for (let x = -w + 1; x < w; x += 2) ctx.fillRect(Math.round(X + x + sw * i / 8), yy, 1, 1);
     }
-    rim(ctx, st, false);
+    rim(ctx, st, end, active, false);
     ctx.fillStyle = '#ff8a4a'; ctx.fillRect(X - 5, Y + 2, 11, 1);
   }
 
@@ -238,12 +261,13 @@
     else if (sp > 2) { pose = hasBall ? 'drib' : 'run'; f = Math.floor(e.run * 0.55) % 4; if (hasBall) pose = 'run'; }
     else if (hasBall) { pose = 'drib'; f = 1; }
     else if (e.side === 1 && st.phase === 'live') pose = 'def';
-    const img = CK.SP.get(e.look, pose, f, e.face < 0);
+    const fl = e.face * (st.dir || 1) < 0;
+    const img = CK.SP.get(e.look, pose, f, fl);
     const X = Math.round(sx) - CK.SP.FX, Y = Math.round(sy) - CK.SP.FY;
     ctx.drawImage(img, X, Y);
     // ball in hands
     if (hasBall) {
-      if (pose === 'shoot' || pose === 'dunk') { const hx = Math.round(sx) + (e.face < 0 ? -3 : 3); ballAt(ctx, hx, Math.round(sy) - 36); }
+      if (pose === 'shoot' || pose === 'dunk') { const hx = Math.round(sx) + (fl ? -3 : 3); ballAt(ctx, hx, Math.round(sy) - 36); }
       else ball(ctx, b.x, b.y, b.z);
     }
     if (e.fire) for (let i = 0; i < 4; i++) { ctx.fillStyle = U.pick(['#ffd23f', '#ff7a1a', '#ff3a1a']); ctx.fillRect(Math.round(sx) - 4 + U.irand(0, 8), Math.round(sy) - 34 - U.irand(0, 5), 1, 2); }

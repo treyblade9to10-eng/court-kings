@@ -6,8 +6,15 @@
   const W = 400, H = 225, BX = 372, YM = 128, KY = 7.0, KX = 2.9, SK = 0.55, ZS = 3.0;
   const HX = 0, HY = 5.25, RIM = 10;
   E.W = W; E.H = H;
-  const proj = E.proj = (x, y, z) => [BX - y * KY + x * SK, YM + x * KX - (z || 0) * ZS];
-  const unproj = E.unproj = (sx, sy) => { const x = (sy - YM) / KX; return [x, (BX + x * SK - sx) / KY]; };
+  // full court: world Y runs 0 (right baseline) .. 94 (left baseline). Each possession works in a local
+  // frame where the offense attacks the hoop at y=5.25; st.dir=-1 mirrors it onto the left end.
+  // E.cam = camera offset in screen px (set by the renderer).
+  E.cam = 0; E.FULL = 94;
+  E.K = { BX, YM, KY, KX, SK, ZS };
+  const projW = E.projW = (X, Y, z) => [BX - Y * KY + X * SK - E.cam, YM + X * KX - (z || 0) * ZS];
+  E.toW = (x, y, d) => d > 0 ? [x, y] : [-x, 94 - y];
+  E.toL = (X, Y, d) => d > 0 ? [X, Y] : [-X, 94 - Y];
+  const proj = E.proj = (x, y, z) => { const d = E.st && E.st.dir || 1; return d > 0 ? projW(x, y, z) : projW(-x, 94 - y, z); };
   const is3 = E.is3 = (x, y) => y <= 14 ? Math.abs(x) >= 22 : Math.hypot(x - HX, y - HY) >= 23.75;
   const dHoop = e => Math.hypot(e.x - HX, e.y - HY);
   const SPOTS = [[0, 29], [-17, 20], [17, 20], [-21.5, 4], [8, 9], [21.5, 4], [-8, 9], [-11, 16], [11, 16], [0, 22]];
@@ -20,24 +27,41 @@
       cfg, t: 0, ents: [], ball: null, sc: 24, phase: 'live', pops: [], parts: [], shake: 0, endT: 0, done: false,
       box: {}, pts: 0, later: [], lastPass: null, user: null, idleT: 0, hl: [], decideT: 0.8, helpT: 0, ftLeft: 0
     };
+    st.dir = cfg.dir || 1; st.both = !!cfg.both; st.flow = !!cfg.flow;
+    st.gc = cfg.clock == null ? 1e9 : cfg.clock;
+    if (st.both) cfg.diff = 2;
     const dm = [0.82, 0.92, 1, 1.07][cfg.diff == null ? 1 : cfg.diff];
-    st.aiMul = { off: cfg.user === 'def' ? 1 / dm * 1.02 : 1, def: cfg.user === 'off' ? dm : 1 };
+    st.aiMul = { off: cfg.user === 'def' && !st.both ? 1 / dm * 1.02 : 1, def: cfg.user === 'off' && !st.both ? dm : 1 };
+    const P = cfg.pos;
+    const at = (pl, x, y) => P && P[pl.id] ? E.toL(P[pl.id][0], P[pl.id][1], st.dir) : [x, y];
     cfg.off.players.forEach((pl, i) => {
       const sp = SPOTS[HOME[i]];
-      const e = mkEnt(pl, 0, i, i === 0 ? 0 : sp[0], i === 0 ? 33 : sp[1] + 2); e.home = HOME[i]; e.spot = HOME[i]; e.cutT = U.rand(1.5, 4);
+      const [x, y] = at(pl, i === 0 ? 0 : sp[0], i === 0 ? 33 : sp[1] + 2);
+      const e = mkEnt(pl, 0, i, x, y); e.home = HOME[i]; e.spot = HOME[i]; e.cutT = U.rand(1.5, 4);
       st.ents.push(e);
     });
     cfg.def.players.forEach((pl, i) => {
       const m = st.ents[i];
-      const e = mkEnt(pl, 1, i, m.x * 0.85, m.y - 4); e.man = m; m.dfn = e; st.ents.push(e);
+      const [x, y] = at(pl, m.x * 0.85, m.y - 4);
+      const e = mkEnt(pl, 1, i, x, y); e.man = m; m.dfn = e; st.ents.push(e);
     });
-    const pg = st.ents[0];
+    let pg = st.ents[0];
+    if (cfg.handler) { const h = st.ents.find(e => e.side === 0 && e.id === cfg.handler); if (h) pg = h; }
+    else if (cfg.inbound) {
+      // inbound: under the far basket after a make, otherwise at the sideline where it died
+      if (cfg.inbAt) { const [x, y] = E.toL(cfg.inbAt[0], cfg.inbAt[1], st.dir); pg.x = pg.tx = (x < 0 ? -1 : 1) * 24; pg.y = pg.ty = U.clamp(y, 3, 90); }
+      else { pg.x = pg.tx = U.pick([-4, 4]); pg.y = pg.ty = 91.5; }
+    }
     st.ball = { s: 'hold', h: pg, x: pg.x, y: pg.y, z: 3, vx: 0, vy: 0, vz: 0, t: 0 };
     pg.ball = true;
-    st.user = cfg.user === 'off' ? pg : cfg.user === 'def' ? pg.dfn : null;
+    st.uo = cfg.user === 'off' || st.both ? pg : null;
+    st.ud = cfg.user === 'def' || st.both ? pg.dfn : null;
+    syncUser();
     st.msgT = 0;
     return st;
   };
+  function syncUser() { const st = E.st; st.user = st.cfg.user === 'off' ? st.uo : st.cfg.user === 'def' ? st.ud : null; }
+  const isHuman = e => e === E.st.uo || e === E.st.ud;
   function mkEnt(pl, side, i, x, y) {
     const r = pl.r;
     return {
@@ -75,42 +99,55 @@
   const defOf = e => E.st.ents.filter(d => d.side !== e.side);
 
   // ---------- main update ----------
-  E.update = (dt, IN) => {
+  E.update = (dt, IN, IN2) => {
     const st = E.st; if (!st) return;
+    const cu = st.cfg.user, inOff = cu === 'off' ? IN : st.both ? IN2 : null, inDef = cu === 'def' ? IN : st.both ? IN2 : null;
     st.t += dt; st.shake = Math.max(0, st.shake - dt * 2.5);
     if (st.later.length) { st.later.forEach(l => l.t -= dt); const due = st.later.filter(l => l.t <= 0); st.later = st.later.filter(l => l.t > 0); due.forEach(l => l.fn()); }
     const b = st.ball;
     if (st.phase === 'live') {
       if (b.s === 'hold' || b.s === 'pass') st.sc -= dt;
-      if (st.sc <= 0 && (b.s === 'hold' || b.s === 'pass')) { pop('SHOT CLOCK', 0, 30, '#ff5050', 2); fx('buzzer'); end('tov', 'Shot clock violation'); }
-      control(dt, IN);
+      st.gc -= dt;
+      if (st.gc <= 0 && b.s !== 'shot' && b.s !== 'net') { st.gc = 0; fx('buzzer'); end('clock', 'End of quarter', 0.9); }
+      else if (st.sc <= 0 && st.gc > 0.5 && (b.s === 'hold' || b.s === 'pass')) { pop('SHOT CLOCK', 0, 30, '#ff5050', 2); fx('buzzer'); end('tov', 'Shot clock violation'); }
+      control(dt, inOff, 'off'); control(dt, inDef, 'def'); syncUser();
       st.ents.forEach(e => ai(e, dt));
-    } else if (st.phase === 'ft') ftUpdate(dt, IN);
+    } else if (st.phase === 'ft') ftUpdate(dt, inOff);
     st.ents.forEach(e => physics(e, dt));
     ballUpdate(dt);
     st.parts.forEach(p => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 30 * dt; if (p.z < 0) { p.z = 0; p.vz *= -0.3; p.vx *= 0.6; p.vy *= 0.6; } });
     st.parts = st.parts.filter(p => p.t < p.life);
     st.pops.forEach(p => p.t += dt); st.pops = st.pops.filter(p => p.t < p.life);
-    if (st.phase === 'end') { st.endT -= dt; if (st.endT <= 0 && !st.done) { st.done = true; st.cfg.onEnd && st.cfg.onEnd(st.result); } }
+    if (st.phase === 'end') {
+      st.endT -= dt;
+      if (st.endT <= 0 && !st.done) {
+        st.done = true; const r = st.result;
+        // hand the next possession where everyone is standing (full court flow)
+        r.pos = {}; st.ents.forEach(e => r.pos[e.id] = E.toW(e.x, e.y, st.dir));
+        r.holder = b.s === 'hold' && b.h ? b.h.id : null; r.holderSide = r.holder ? b.h.side : null;
+        r.ballW = E.toW(b.x, b.y, st.dir); r.gc = st.gc; r.dead = b.s === 'dead';
+        st.cfg.onEnd && st.cfg.onEnd(r);
+      }
+    }
   };
 
   function later(fn, t) { E.st.later.push({ fn, t }); }
   function end(tag, text, delay) {
     const st = E.st; if (st.phase === 'end') return;
     st.phase = 'end'; st.endT = delay || 1.4;
+    if (st.flow) st.endT = tag === 'make' ? Math.min(st.endT, 1.0) : tag === 'clock' ? 0.9 : Math.min(st.endT, 0.3);
     st.result = { tag, text, pts: st.pts, box: st.box, hl: st.hl, sc: st.sc };
   }
 
   // ---------- user input ----------
-  function control(dt, IN) {
-    const st = E.st, u = st.user, cfg = st.cfg;
+  function control(dt, IN, side) {
+    const st = E.st;
     if (!IN) return;
     const mag = Math.hypot(IN.jx, IN.jy);
-    st.idleT = mag > 0.15 ? 0 : st.idleT + dt;
-    if (cfg.user === 'off') {
+    if (side === 'off') {
       const h = st.ball.s === 'hold' ? st.ball.h : null;
-      if (h && h.side === 0) st.user = h;
-      const e = st.user;
+      if (h && h.side === 0) st.uo = h;
+      const e = st.uo; if (!e) return;
       if (mag > 0.15 && e.state === 'run' && e.stun <= 0) { e.tx = e.x + IN.jx / Math.max(1, mag) * 6; e.ty = e.y + IN.jy / Math.max(1, mag) * 6; e.userMove = mag; }
       else { e.userMove = 0; if (h === e && e.state === 'run') { e.tx = e.x; e.ty = e.y; } }
       if (h === e && e.state === 'run') {
@@ -122,10 +159,10 @@
       }
       if (e.state === 'shoot' && e.userShot && !e.released && (IN.Ar || !IN.A)) release(e);
     } else {
-      // defense: user guards whoever has the ball
+      // defense: the human guards whoever has the ball
       const h = st.ball.s === 'hold' && st.ball.h.side === 0 ? st.ball.h : null;
-      if (h && h.dfn && st.user !== h.dfn && st.user.state === 'run') st.user = h.dfn;
-      const e = st.user;
+      if (h && h.dfn && st.ud !== h.dfn && (!st.ud || st.ud.state === 'run')) st.ud = h.dfn;
+      const e = st.ud; if (!e) return;
       if (mag > 0.15 && e.stun <= 0 && e.state === 'run') { e.tx = e.x + IN.jx / Math.max(1, mag) * 6; e.ty = e.y + IN.jy / Math.max(1, mag) * 6; e.userMove = mag; }
       else e.userMove = 0;
       if (IN.Ap && e.state === 'run' && e.z <= 0) { e.state = 'jump'; e.vz = 12 + e.pl.r.ath * 0.25; e.stT = 0; e.userJump = true; fx('jump'); }
@@ -304,7 +341,7 @@
   }
   function ftUpdate(dt, IN) {
     const st = E.st, e = st.ftShooter; st.ftT += dt;
-    const userShoots = st.cfg.user === 'off';
+    const userShoots = st.cfg.user === 'off' || st.both;
     if (st.ftState === 'set') {
       if (st.ftT > 0.9) { st.ftState = 'meter'; st.ftT = 0; e.state = 'ftm'; e.stT = 0; }
     } else if (st.ftState === 'meter') {
@@ -335,8 +372,8 @@
     e.cd = Math.max(0, e.cd - dt);
     if (e.stun > 0) { e.stun -= dt; e.tx = e.x; e.ty = e.y; if (e.stun <= 0) e.fell = false; return; }
     if (e.state !== 'run') return;
-    const isUser = e === st.user && (e.userMove || (st.cfg.user === 'off' && e.ball));
-    if (b.s === 'loose') { if (!(e === st.user && e.userMove)) looseChase(e); return; }
+    const isUser = (e === st.uo && (e.userMove || e.ball)) || (e === st.ud && e.userMove);
+    if (b.s === 'loose') { if (!(isHuman(e) && e.userMove)) looseChase(e); return; }
     if (e.side === 0) {
       if (e.ball) { if (!isUser) aiHandler(e, dt); }
       else if (!isUser) offBall(e, dt);
@@ -347,7 +384,6 @@
     const land = { x: b.x + b.vx * 0.4, y: b.y + b.vy * 0.4 };
     const mine = st.ents.filter(o => o.side === e.side).sort((a, c) => Math.hypot(a.x - land.x, a.y - land.y) - Math.hypot(c.x - land.x, c.y - land.y));
     if (mine.indexOf(e) < 3) { e.tx = land.x; e.ty = land.y; }
-    if (e === st.user && e.userMove) return;
   }
   function offBall(e, dt) {
     const st = E.st, b = st.ball, h = b.s === 'hold' ? b.h : null;
@@ -437,7 +473,7 @@
     if (!onBall) { tx = U.lerp(tx, ballX, 0.12); ty = U.lerp(ty, ballY, 0.12); }
     // help: nearest off-ball defender rotates when the ball is deep
     if (b.s === 'hold' && b.h.side === 0 && !onBall && dHoop(b.h) < 11) {
-      const helpers = defE().filter(d => d.man !== b.h && d.stun <= 0 && d !== st.user);
+      const helpers = defE().filter(d => d.man !== b.h && d.stun <= 0 && d !== st.ud);
       helpers.sort((a, c) => Math.hypot(a.x - b.h.x, a.y - b.h.y) - Math.hypot(c.x - b.h.x, c.y - b.h.y));
       if (helpers[0] === e) { tx = U.lerp(b.h.x, HX, 0.4); ty = U.lerp(b.h.y, HY, 0.4); }
     }
@@ -487,8 +523,8 @@
     if (mv) {
       const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
       let spd = e.spd * (e.ball ? 0.9 : 1) * (e.fire ? 1.06 : 1);
-      if (e.side === 1 && st.cfg.user === 'off' && e !== st.user) spd *= st.aiMul.def;
-      if (e.side === 0 && st.cfg.user === 'def' && e !== st.user) spd *= Math.min(1.05, st.aiMul.off);
+      if (e.side === 1 && e !== st.ud) spd *= st.aiMul.def;
+      if (e.side === 0 && e !== st.uo) spd *= Math.min(1.05, st.aiMul.off);
       if (e.userMove) spd *= 0.55 + 0.45 * Math.min(1, e.userMove);
       const want = d < 0.3 ? 0 : Math.min(spd, d * 4);
       const dvx = d ? dx / d * want : 0, dvy = d ? dy / d * want : 0;
@@ -501,7 +537,7 @@
     else if (e.state === 'run' && Math.hypot(e.vx, e.vy) < 1.5) e.face = e.side === 0 ? 1 : -1;
     if (e.state === 'shoot' || e.state === 'fin') e.face = 1;
     const sp = Math.hypot(e.vx, e.vy); e.run += sp * dt;
-    e.x = U.clamp(e.x, -24.5, 24.5); e.y = U.clamp(e.y, 0.6, 46.5);
+    e.x = U.clamp(e.x, -24.5, 24.5); e.y = U.clamp(e.y, 0.6, 93.4);
     // separation
     st.ents.forEach(o => { if (o === e || o.state === 'fin') return; const dx = e.x - o.x, dy = e.y - o.y, d = Math.hypot(dx, dy); if (d < 1.6 && d > 0.01) { const push = (1.6 - d) * 0.5; e.x += dx / d * push; e.y += dy / d * push; } });
     if (e.z > 0 || e.vz) { e.vz -= 32 * dt; e.z += e.vz * dt; if (e.z <= 0) { e.z = 0; e.vz = 0; } }
@@ -569,7 +605,7 @@
     } else if (b.s === 'loose') {
       b.x += b.vx * dt; b.y += b.vy * dt; b.vz -= 32 * dt; b.z += b.vz * dt;
       if (b.z < 0) { b.z = 0; b.vz = Math.abs(b.vz) * 0.5; b.vx *= 0.62; b.vy *= 0.62; if (b.vz > 2) fx('bounce'); }
-      if (b.x < -25.5 || b.x > 25.5 || b.y < -0.5 || b.y > 47) {
+      if (b.x < -25.5 || b.x > 25.5 || b.y < -0.5 || b.y > 94.5) {
         if (b.lastTouch === 1) { pop('OUT OFF DEFENSE', 0, 30, '#fff', 2); resetInbound(); }
         else { pop('OUT OF BOUNDS', 0, 30, '#fff', 2); end(b.missT != null ? 'miss' : 'tov', 'Out of bounds ' + (b.src || ''), 1.1); b.s = 'dead'; }
         return;
@@ -597,16 +633,18 @@
       end(fromShot ? 'miss' : 'tov', fromShot ? 'Defensive rebound' : 'Turnover', 1.1);
     } else {
       if (fromShot) { pop('OFF. BOARD', 0, 34, st.cfg.user === 'off' ? '#7cff6b' : '#ff7070', 2); st.sc = Math.max(st.sc, 14); }
-      if (st.cfg.user === 'off') st.user = e;
-      else if (st.cfg.user === 'def' && e.dfn) st.user = e.dfn;
+      if (st.uo) st.uo = e;
+      if (st.ud && e.dfn) st.ud = e.dfn;
+      syncUser();
     }
   }
   function resetInbound() {
     const st = E.st, b = st.ball, pg = offE()[0];
     pg.x = pg.tx = 0; pg.y = pg.ty = 30; b.s = 'hold'; b.h = pg; pg.ball = true; st.sc = Math.max(st.sc, 14);
-    if (st.cfg.user === 'off') st.user = pg;
+    if (st.uo) st.uo = pg; syncUser();
   }
 
   // expose for render/tests
+  E.isHuman = isHuman;
   E.dHoop = dHoop; E.HOOP = { x: HX, y: HY, z: RIM }; E.contest = contest;
 })(window.CK);

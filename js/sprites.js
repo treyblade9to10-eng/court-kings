@@ -8,7 +8,8 @@
   // look: {skin, hair, hc, jersey, trim, shorts, shoe, num, ht}
   // pose: idle | run | drib | shoot | jump | def | reach | dunk | fall | cele ; f = frame 0-3
   SP.get = (look, pose, f, flip) => {
-    const key = look.key + '|' + pose + '|' + (f | 0) + '|' + (flip ? 1 : 0);
+    f = (((f | 0) % 4) + 4) % 4;
+    const key = look.key + '|' + pose + '|' + f + '|' + (flip ? 1 : 0);
     let c = cache.get(key);
     if (!c) { c = build(look, pose, f | 0, flip); cache.set(key, c); if (cache.size > 3000) cache.clear(); }
     return c;

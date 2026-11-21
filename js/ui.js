@@ -39,20 +39,40 @@
   UI.closeModal = () => $('#modal').classList.remove('on');
   const click = (sel, fn) => document.querySelectorAll(sel).forEach(el => el.addEventListener('click', e => { CK.SFX.init(); CK.SFX.play('click'); fn(el, e); }));
 
+  // ---------- shared game options (mode, quarter length, possessions, difficulty) ----------
+  const QLENS = [2, 3, 5, 8];
+  UI.gameOpts = o => '<div class="lbl">GAME MODE</div><div class="seg" id="omode"><button data-v="full" class="' + (o.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (o.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS + SIMMED STRETCHES</button></div>' +
+    (o.mode !== 'highlights'
+      ? '<div class="lbl">QUARTER LENGTH <small>game clock, you play every possession</small></div><div class="seg" id="oqlen">' + QLENS.map(n => '<button data-v="' + n + '" class="' + ((o.qlen || 3) === n ? 'sel' : '') + '">' + n + ' MIN</button>').join('') + '</div>'
+      : '<div class="lbl">POSSESSIONS YOU PLAY PER QUARTER <small>the rest gets simmed</small></div><div class="seg" id="oppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + ((o.ppq || 3) === n ? 'sel' : '') + '">' + n + ' + ' + n + '</button>').join('') + '</div>') +
+    (o.noDiff ? '' : '<div class="lbl">DIFFICULTY</div><div class="seg" id="odif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + ((o.diff == null ? 1 : o.diff) === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>');
+  UI.bindOpts = (o, redraw) => {
+    click('#omode button', el => { o.mode = el.dataset.v; redraw(); });
+    click('#oqlen button', el => { o.qlen = +el.dataset.v; redraw(); });
+    click('#oppq button', el => { o.ppq = +el.dataset.v; redraw(); });
+    click('#odif button', el => { o.diff = +el.dataset.v; redraw(); });
+  };
+  // a throwaway league with today's real rosters (Play Now / online), the career save is untouched
+  UI.tempLeague = me => { const keep = CK.S; const t = L.newLeague({ team: me }); t.logos = keep && keep.logos; t.tutDone = true; t.temp = true; return () => { CK.S = keep; }; };
+
   // ---------- title ----------
   UI.title = () => {
     const has = L.load();
     if (has) CK.SFX.on = CK.S.sfx !== false;
     app().innerHTML = '<div class="title"><canvas id="tcv" width="400" height="225"></canvas><div class="tbox"><div class="tleft">' +
       '<h1><span>COURT</span><span>KINGS</span></h1><div class="tag">RETRO HOOPS DYNASTY</div></div><div class="tright">' +
-      (has ? '<button class="btn" id="cont">CONTINUE<small>' + U.esc(L.myTeam().city) + ' ' + rec(L.myTeam()) + ' / ' + CK.S.season + '</small></button>' : '') +
-      '<button class="btn ' + (has ? 'alt' : '') + '" id="newc">NEW CAREER</button>' +
+      (has ? '<button class="btn" id="cont">CONTINUE CAREER<small>' + U.esc(L.myTeam().city) + ' ' + rec(L.myTeam()) + ' / ' + CK.S.season + (CK.S.real ? '' : ' / old made-up players: start a new career for real rosters') + '</small></button>' : '') +
+      '<button class="btn ' + (has ? 'alt' : '') + '" id="pnow">PLAY NOW<small>quick game, any two teams</small></button>' +
+      '<button class="btn alt" id="ponl">PLAY NOW ONLINE<small>you vs a friend</small></button>' +
+      '<button class="btn alt" id="newc">' + (has ? 'NEW CAREER' : 'CAREER MODE<small>coach a team for seasons</small>') + '</button>' +
       '<button class="btn alt" id="how">HOW TO PLAY</button>' +
       '<div class="foot">v' + CK.VER + '</div></div></div></div>';
     titleAnim();
     if (has) click('#cont', () => UI.hub('home'));
     click('#newc', () => { if (has && !confirm('Start over? Your current career will be erased.')) return; UI.newCareer(); });
     click('#how', UI.howTo);
+    click('#pnow', () => UI.playNow());
+    click('#ponl', () => UI.online());
   };
   // attract mode: two real teams play each other behind the title
   function titleAnim() {
@@ -66,26 +86,33 @@
       for (const p of ps) { if (out.length >= 5) break; if (!out.includes(p)) out.push(p); }
       return out.sort((a, b) => CK.POS.indexOf(a.pos) - CK.POS.indexOf(b.pos));
     };
-    let home, away;
+    let home, away, hp, ap, n = 0;
+    const poss = (offHome, r) => {
+      const o = offHome ? home : away, d = offHome ? away : home;
+      const cfg = { off: Object.assign({ players: offHome ? hp : ap }, CK.M.jersey(o, offHome)), def: Object.assign({ players: offHome ? ap : hp }, CK.M.jersey(d, !offHome)), user: 'watch', diff: 1, dir: offHome ? 1 : -1, flow: true,
+        onEnd: res => { if (!document.body.contains(c)) return; if (++n > 24) return newGame(); poss(!offHome, res); } };
+      if (r) { cfg.pos = r.pos; if (r.holder && r.holderSide === 1) cfg.handler = r.holder; else { cfg.inbound = true; if (r.tag !== 'make' && r.ballW) cfg.inbAt = r.ballW; } }
+      E.start(cfg); E.st.user = null;
+    };
     const newGame = () => {
-      const ts = U.shuffle(CK.TEAMS.slice()); home = team(ts[0]); away = team(ts[1]);
+      const ts = U.shuffle(CK.TEAMS.slice()); home = team(ts[0]); away = team(ts[1]); hp = five(home.ab); ap = five(away.ab); n = 0;
       CK.RD.buildCourt(home, away);
-      E.start({ off: Object.assign({ players: five(away.ab) }, CK.M.jersey(away, false)), def: Object.assign({ players: five(home.ab) }, CK.M.jersey(home, true)), user: 'watch', diff: 1, onEnd: () => setTimeout(() => { if (document.body.contains(c)) newGame(); }, 200) });
-      E.st.user = null;
+      poss(Math.random() < 0.5, null);
     };
     newGame();
     let last = performance.now();
     const tick = now => {
       if (!document.body.contains(c) || CK.inGame) return;
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
-      if (E.st && E.st.cfg.user === 'watch') { E.update(dt); CK.RD.draw(g, { hype: 0.3 }); }
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+      if (E.st && E.st.cfg.user === 'watch') { E.update(dt); if (E.st) CK.RD.draw(g, { hype: 0.3, keepCam: n > 0 }); }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   }
   UI.howTo = () => UI.modal('<h2>HOW TO PLAY</h2><div class="how">' +
     '<p><b>You are the coach.</b> Pick a team, win games, earn Coach Credits (CC), and build a dynasty.</p>' +
-    '<p><b>Games:</b> most of the game is simmed. You play the big possessions on offense AND defense. The last ones in the 4th quarter are CLUTCH TIME.</p>' +
+    '<p><b>Games:</b> FULL GAME mode is full court with a running clock: you play every possession, offense and defense, and the ball goes right back the other way. Pick 2, 3, 5 or 8 minute quarters. HIGHLIGHTS mode sims most of the game and you only play the big possessions.</p>' +
+    '<p><b>Play Now</b> is a quick game with any two real teams. <b>Play Now Online</b> lets you play a friend: one hosts and gets a code, the other joins with it.</p>' +
     '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. MOVE is a crossover that can break ankles. Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
     '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters (time it with their shot). STEAL pokes at the ball, but you can foul.</p>' +
     '<p><b>Hit 3 in a row</b> with the same player and he catches fire.</p>' +
@@ -94,34 +121,31 @@
 
   // ---------- new career ----------
   UI.newCareer = () => {
-    let pick = null, diff = 1, len = 20, ppq = 3;
+    let pick = null, len = 20;
+    const o = { mode: 'full', qlen: 3, ppq: 3, diff: 1 };
     const tmp = { teams: CK.TEAMS };
     // preview league to show strengths
-    let real = true, prev, strengths;
-    const mk = () => { prev = L.newLeague({ team: 0, real }); strengths = prev.teams.map(t => L.teamStars(t)); };
+    let prev, strengths;
+    const mk = () => { prev = L.newLeague({ team: 0 }); strengths = prev.teams.map(t => L.teamStars(t)); };
     mk();
     const draw = () => {
       app().innerHTML = '<div class="page new"><h2>NEW CAREER</h2>' +
         '<label class="fld">COACH NAME<input id="cname" maxlength="16" value="' + U.esc(UI._cn || 'Coach') + '"></label>' +
         '<div class="lbl">PICK YOUR TEAM</div><div class="tgrid">' +
         prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'tlg') + '<b>' + t.ab + '</b><span>' + U.esc(t.name || t.city) + '</span>' + UI.stars(strengths[i]) + '</button>').join('') + '</div>' +
-        '<div class="lbl">ROSTERS</div><div class="seg" id="rr"><button data-v="1" class="' + (real ? 'sel' : '') + '">REAL 2026-27 PLAYERS</button><button data-v="0" class="' + (!real ? 'sel' : '') + '">MADE-UP PLAYERS</button></div>' +
-        '<div class="lbl">DIFFICULTY</div><div class="seg" id="dif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>' +
+        UI.gameOpts(o) +
         '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [12, 20, 30].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + ' GAMES</button>').join('') + '</div>' +
-        '<div class="lbl">POSSESSIONS YOU PLAY PER QUARTER</div><div class="seg" id="ppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (ppq === n ? 'sel' : '') + '">' + n + ' + ' + n + '</button>').join('') + '</div>' +
         '<button class="btn" id="go" ' + (pick == null ? 'disabled' : '') + '>' + (pick == null ? 'PICK A TEAM' : 'COACH ' + prev.teams[pick].city.toUpperCase()) + '</button>' +
         '<button class="btn alt" id="back">BACK</button></div>';
       click('.tpick', el => { UI._cn = $('#cname').value; pick = +el.dataset.i; draw(); });
-      click('#rr button', el => { UI._cn = $('#cname').value; real = el.dataset.v === '1'; mk(); draw(); });
-      click('#dif button', el => { UI._cn = $('#cname').value; diff = +el.dataset.v; draw(); });
+      UI.bindOpts(o, () => { UI._cn = $('#cname').value; draw(); });
       click('#len button', el => { UI._cn = $('#cname').value; len = +el.dataset.v; draw(); });
-      click('#ppq button', el => { UI._cn = $('#cname').value; ppq = +el.dataset.v; draw(); });
       click('#back', () => UI.title());
       click('#go', () => {
         if (pick == null) return;
         const coach = ($('#cname').value || 'Coach').trim().slice(0, 16);
         // keep the previewed league so the strengths shown are the real ones
-        const S = CK.S; S.me = pick; S.coach = coach; S.diff = diff; S.len = len; S.ppq = ppq;
+        const S = CK.S; S.me = pick; S.coach = coach; S.diff = o.diff; S.len = len; S.ppq = o.ppq; S.mode = o.mode; S.qlen = o.qlen;
         L.makeSchedule(); S.inbox = []; L.inbox(/^coach$/i.test(coach) ? 'Welcome, Coach' : 'Welcome, Coach ' + coach, 'The owner hired you to bring a title to ' + L.myTeam().city + '. Win games to earn Coach Credits, keep the fans happy, and do not let the owner lose faith.');
         L.save(); UI.hub('home');
       });
@@ -320,7 +344,9 @@
       (S.fac[k] >= 5 ? '<span class="max">MAX</span>' : '<button class="btn sm" data-k="' + k + '">UPGRADE<small>' + O.facCost(k) + ' CC</small></button>') + '</div>').join('') +
       '<div class="lbl">SETTINGS</div>' +
       '<div class="setrow">DIFFICULTY<div class="seg" id="sdif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (S.diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
-      '<div class="setrow">POSSESSIONS PER QUARTER<div class="seg" id="sppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (S.ppq === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
+      '<div class="setrow">GAME MODE<div class="seg" id="smode"><button data-v="full" class="' + (S.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (S.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS + SIMS</button></div></div>' +
+      (S.mode !== 'highlights' ? '<div class="setrow">QUARTER LENGTH<div class="seg" id="sqlen">' + QLENS.map(n => '<button data-v="' + n + '" class="' + ((S.qlen || 3) === n ? 'sel' : '') + '">' + n + ' MIN</button>').join('') + '</div></div>'
+        : '<div class="setrow">POSSESSIONS PER QUARTER<div class="seg" id="sppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (S.ppq === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>') +
       '<div class="setrow">TEAM LOGOS<div class="seg" id="slg"><button data-v="real" class="' + (S.logos !== 'retro' ? 'sel' : '') + '">REAL</button><button data-v="retro" class="' + (S.logos === 'retro' ? 'sel' : '') + '">RETRO LETTERS</button></div></div>' +
       '<div class="setrow">SOUND<div class="seg" id="ssnd"><button data-v="1" class="' + (CK.SFX.on ? 'sel' : '') + '">ON</button><button data-v="0" class="' + (!CK.SFX.on ? 'sel' : '') + '">OFF</button></div></div>' +
       '<button class="btn alt sm" id="howb">HOW TO PLAY</button><button class="btn alt sm" id="quit">TITLE SCREEN</button>' +
@@ -328,6 +354,8 @@
     click('.fac .btn', el => { const err = O.upgrade(el.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.hub('office'); UI.toast('Upgraded!'); });
     click('#sdif button', el => { S.diff = +el.dataset.v; L.save(); UI.hub('office'); });
     click('#sppq button', el => { S.ppq = +el.dataset.v; L.save(); UI.hub('office'); });
+    click('#smode button', el => { S.mode = el.dataset.v; L.save(); UI.hub('office'); });
+    click('#sqlen button', el => { S.qlen = +el.dataset.v; L.save(); UI.hub('office'); });
     click('#slg button', el => { S.logos = el.dataset.v; L.save(); UI.hub('office'); });
     click('#ssnd button', el => { CK.SFX.on = el.dataset.v === '1'; S.sfx = CK.SFX.on; L.save(); UI.hub('office'); });
     click('#howb', UI.howTo); click('#quit', UI.title);
