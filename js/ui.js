@@ -148,7 +148,7 @@
     '<p><b>Play Now</b> is a quick game with any two real teams. <b>Play Now Online</b> lets you play a friend: one hosts and gets a code, the other joins with it.</p>' +
     '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. CROSS, SPIN, HESI and STEP BACK are dribble moves that can break ankles (step-back makes space for a jumper). Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
     '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters. Once the shot goes up the button says BLOCK: hit it then for extra reach. STEAL pokes at the ball, but you can foul.</p>' +
-    '<p><b>Hit 3 in a row</b> with the same player and he catches fire.</p>' +
+    '<p><b>Hit 3 in a row</b> with the same player and he catches fire.</p><p><b>Players:</b> SHOOTING, 3PT, INSIDE, DRIBBLING, PASSING, DEFENSE, SPEED and STAMINA. Good games give XP. Enough XP = a level up, and you pick a skill (shooting, 3PT, dribbling, defense, speed or stamina) to raise by 1. Young players with high potential learn faster and also grow during the season. Tired players (low stamina) shoot worse and slow down late in quarters.</p><p><b>Mood:</b> wins, minutes and big games make players happy. Unhappy players play a bit worse and will not re-sign. Extend players in their contract year from their card.</p><p><b>Trades:</b> you can trade draft picks. Contenders want win-now players, rebuilders want youth and picks. Young high-potential players and rookies cost a lot. MAKE IT WORK fills in what it would take.</p>' +
     '<p><b>Keyboard (computer):</b> WASD or arrows move, Space shoot / contest / block, K pass to the open man, 1-5 pass to a teammate, E cross, F spin, R hesi, Q step-back, C behind the back, L or E steal on defense, P pause.</p><p><b>Bigs set screens</b> on your defender. Use the pick, then hit the big rolling to the rim.</p><p><b>Phone:</b> play it sideways.</p>' +
     '<p><b>Front office:</b> spend CC to train players and upgrade facilities. Keep the fans and the owner happy or you get fired.</p></div>');
 
@@ -204,6 +204,10 @@
   };
   const icon = (k, col) => { const r = ICONS[k] || []; let d = ''; r.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '#') d += 'M' + x + ' ' + y + 'h1v1h-1z'; }); return '<svg class="ico" viewBox="0 0 10 10" shape-rendering="crispEdges"><path d="' + d + '" fill="' + (col || 'currentColor') + '"/></svg>'; };
   UI.icon = icon;
+  // pixel gold coin for Coach Credits
+  const COIN = ['...kkkkkk...', '.kkyyyyyykk.', '.kyYYYYYYyk.', 'kyYwYccccYyk', 'kyYwcYYYYYyk', 'kyYcYYYYYYyk', 'kyYcYYYYYYyk', 'kyYYcYYYYYyk', 'kyYYYccccYyk', '.kyYYYYYYyk.', '.kkyyyyyykk.', '...kkkkkk...'];
+  const COINC = { k: '#6b3d00', y: '#f5a313', Y: '#ffd84a', w: '#fff7c2', c: '#b36b00' };
+  UI.coin = () => { const by = {}; COIN.forEach((row, y) => { for (let x = 0; x < 12; x++) { const ch = row[x]; if (ch !== '.') by[ch] = (by[ch] || '') + 'M' + x + ' ' + y + 'h1v1h-1z'; } }); return '<svg class="coin" viewBox="0 0 12 12" shape-rendering="crispEdges">' + Object.keys(by).map(k => '<path d="' + by[k] + '" fill="' + COINC[k] + '"/>').join('') + '</svg>'; };
 
   // ---------- hub: side rail + top bar, sized to one landscape screen ----------
   const TABS = [['home', 'HOME'], ['roster', 'ROSTER'], ['league', 'LEAGUE'], ['trade', 'TRADE'], ['office', 'OFFICE']];
@@ -219,9 +223,9 @@
     app().innerHTML = '<div class="hub" style="--tc:' + me.c1 + ';--tc2:' + me.c2 + '">' +
       '<nav><div class="rlogo">' + (UI.logo(me, 'big') || '<b>' + me.ab + '</b>') + '</div>' +
       TABS.map(([k, n]) => '<button data-t="' + k + '" class="' + (tab === k ? 'sel' : '') + '">' + icon(k) + '<span>' + n + '</span>' + (k === 'home' && unread ? '<em>' + unread + '</em>' : '') + '</button>').join('') + '</nav>' +
-      '<header><div class="tn"><b>' + U.esc((me.city + ' ' + (me.name || '')).toUpperCase()) + '</b><span>' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' IN THE ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '-' + String(S.season + 1).slice(2) + '</span></div>' +
-      chip('FANS', S.fans, '#3dff6a') + chip('OWNER', S.owner, S.owner < 25 ? '#ff4d4d' : '#ffd23f') +
-      '<div class="cc" title="Coach Credits"><i>CC</i><b>' + S.cc + '</b></div></header>' +
+      '<header><div class="tn"><b>' + U.esc((me.name || me.city).toUpperCase()) + '</b><span>' + U.esc(me.city.toUpperCase()) + ' / ' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' IN THE ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '-' + String(S.season + 1).slice(2) + '</span></div>' +
+      chip('FANS', S.fans, '#3dff6a') + chip('OWNER', S.owner, S.owner < 25 ? '#ff4d4d' : '#ffd23f') + (tm => chip('TEAM MOOD', tm, tm < 40 ? '#ff4d4d' : tm < 62 ? '#ffd23f' : '#7cd6ff'))(CK.FO.teamMorale(me)) +
+      '<div class="cc2" title="Coach Credits">' + UI.coin() + '<div><b>' + S.cc + '</b><i>COACH CREDITS</i></div></div></header>' +
       '<main id="tab" class="t-' + tab + '"></main></div>';
     click('nav button', el => UI.hub(el.dataset.t));
     ({ home: tabHome, roster: tabRoster, league: tabLeague, trade: tabTrade, office: tabOffice })[tab]();
@@ -277,7 +281,7 @@
   }
 
   // ---------- news cards: after-game dilemmas, good/bad news, injuries, trade offers ----------
-  const KIND = { locker: ['LOCKER ROOM', '#3d8bff'], media: ['MEDIA', '#b06bff'], office: ['FRONT OFFICE', '#ffd23f'], inj: ['INJURY REPORT', '#ff4d4d'], trade: ['TRADE OFFER', '#22c3c3'], good: ['GOOD NEWS', '#3dff6a'], bad: ['BAD NEWS', '#ff7a4d'] };
+  const KIND = { lvl: ['LEVEL UP', '#3dff6a'], locker: ['LOCKER ROOM', '#3d8bff'], media: ['MEDIA', '#b06bff'], office: ['FRONT OFFICE', '#ffd23f'], inj: ['INJURY REPORT', '#ff4d4d'], trade: ['TRADE OFFER', '#22c3c3'], good: ['GOOD NEWS', '#3dff6a'], bad: ['BAD NEWS', '#ff7a4d'] };
   function cardHtml(m) {
     const S = CK.S, k = KIND[m.kind] || ['NEWS', '#8a90b8'], me = L.myTeam();
     const pid = m.choices && m.choices[0] && m.choices[0].pid;
@@ -367,7 +371,7 @@
     const pay = L.payroll(me);
     const row = p => { const st = me.start.includes(p.id), gp = Math.max(1, p.st.gp);
       return '<div class="rbr' + (st ? ' on5' : '') + '" data-id="' + p.id + '">' + UI.posBadge(p.pos) + UI.portrait(p, me, 34) +
-        '<div class="rbn"><b>' + U.esc(L.short(p).toUpperCase()) + (p.inj ? ' <em class="inj">OUT ' + p.inj + '</em>' : '') + '</b><span>#' + p.num + (p.st.gp ? ' / ' + (p.st.pts / gp).toFixed(1) + ' PPG' : '') + (st ? ' / STARTER' : '') + '</span></div>' +
+        '<div class="rbn"><b><i class="mdot" style="background:' + (p.morale < 40 ? '#ff4d4d' : p.morale < 62 ? '#ffd23f' : '#3dff6a') + '"></i>' + U.esc(L.short(p).toUpperCase()) + (p.inj ? ' <em class="inj">OUT ' + p.inj + '</em>' : '') + (p.pending ? ' <em class="lvu">LV UP</em>' : '') + '</b><span>LV ' + (p.lvl || 1) + ' / #' + p.num + (p.st.gp ? ' / ' + (p.st.pts / gp).toFixed(1) + ' PPG' : '') + (p.yrs <= 1 ? ' / CONTRACT YEAR' : '') + '</span></div>' +
         '<div class="rbs">' + UI.stars(L.stars(p)) + '</div><div class="rba">' + p.age + '</div><div class="rbc">' + U.money(p.sal) + '<small>' + Math.max(0, p.yrs) + ' YR</small></div></div>'; };
     $('#tab').innerHTML = '<div class="rhead"><span>' + me.roster.length + '/' + CK.ROSTER_MAX + ' PLAYERS</span><span class="' + (pay > CK.CAP ? 'bad' : '') + '">PAYROLL ' + U.money(pay) + ' / ' + U.money(CK.CAP) + '</span></div>' +
       '<div class="seg rsort">' + [['depth', 'LINEUP'], ['ovr', 'RATING'], ['age', 'AGE'], ['sal', 'SALARY']].map(([k, n]) => '<button data-v="' + k + '" class="' + (rsort === k ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>' +
@@ -383,30 +387,40 @@
       (st.gp ? '<span class="ln">' + (st.pts / gp).toFixed(1) + ' PPG ' + (st.reb / gp).toFixed(1) + ' RPG ' + (st.ast / gp).toFixed(1) + ' APG</span>' : '') + '</div>' +
       '<div class="pr">' + UI.stars(L.stars(p)) + (extra || '') + '</div></div>';
   }
+  const GOOD = { sht: 'MID-RANGE ASSASSIN', thr: 'SHARPSHOOTER', ins: 'FINISHER', drb: 'ANKLE BREAKER', pas: 'PLAYMAKER', def: 'LOCKDOWN', ath: 'SPEEDSTER', sta: 'ENDLESS MOTOR' };
+  const BAD = { sht: 'NO JUMPER', thr: 'NO 3PT RANGE', ins: 'SOFT INSIDE', drb: 'LOOSE HANDLES', pas: 'TUNNEL VISION', def: 'TURNSTILE', ath: 'SLOW FEET', sta: 'TIRES FAST' };
+  const rcol = v => v >= 8 ? '#3dff6a' : v >= 6 ? '#b6f23d' : v >= 4 ? '#ffd23f' : '#ff6a4d';
   UI.player = (p, opts) => {
-    const S = CK.S, me = L.myTeam(), mine = p.tm === S.me, t = p.tm >= 0 ? L.T(p.tm) : null;
-    const gp = Math.max(1, p.st.gp);
-    const html = '<div class="pcard2" style="--c:' + (t ? t.c1 : '#444') + ';--c2:' + (t ? t.c2 : '#888') + '">' +
+    CK.fillRatings(p);
+    const S = CK.S, me = L.myTeam(), mine = p.tm === S.me, t = p.tm >= 0 ? L.T(p.tm) : null, FO = CK.FO;
+    const gp = Math.max(1, p.st.gp), edit = mine && !opts;
+    const keys = CK.RKEYS, best = keys.slice().sort((x, y) => p.r[y] - p.r[x]);
+    const good = keys.filter(k => p.r[k] >= 8).sort((x, y) => p.r[y] - p.r[x]).slice(0, 3), bad = keys.filter(k => p.r[k] <= 3).slice(0, 2);
+    if (!good.length) good.push(best[0]);
+    const need = FO.xpNeed(p), xpPct = Math.round(p.xp / need * 100);
+    const mood = FO.moodWord(p.morale), canExt = edit && p.yrs <= 1 && S.phase === 'season';
+    const html = '<div class="pc3" style="--c:' + (t ? t.c1 : '#444') + ';--c2:' + (t ? t.c2 : '#888') + '">' +
       '<div class="pcf"><div class="pct">' + UI.posBadge(p.pos, true) + '<span class="pcn">#' + p.num + '</span>' + (t ? UI.logo(t, 'sm') : '') + '</div>' +
       '<div class="pcp">' + UI.portrait(p, t, 96) + '</div>' +
       '<div class="pcname"><small>' + U.esc((p.fn || '').toUpperCase()) + '</small><b>' + U.esc(p.ln.toUpperCase()) + '</b></div>' +
-      '<div class="pcs">' + UI.stars(L.stars(p)) + '</div></div>' +
-      '<div class="pci"><div class="pcrow"><span>TEAM</span><b>' + (t ? U.esc(t.city.toUpperCase()) : 'FREE AGENT') + '</b></div>' +
-      '<div class="pcrow"><span>POSITION</span><b>' + ({ PG: 'POINT GUARD', SG: 'SHOOTING GUARD', SF: 'SMALL FORWARD', PF: 'POWER FORWARD', C: 'CENTER' }[p.pos] || p.pos) + '</b></div>' +
-      '<div class="pcrow"><span>HEIGHT</span><b>' + Math.floor(p.ht / 12) + "'" + (p.ht % 12) + '"</b></div>' +
-      '<div class="pcrow"><span>AGE</span><b>' + p.age + '</b></div>' +
-      '<div class="pcrow"><span>OVERALL</span><b class="ovr">' + L.ovr(p).toFixed(1) + '</b></div>' +
-      '<div class="pcrow"><span>SEASON</span><b>' + (p.st.gp ? (p.st.pts / gp).toFixed(1) + ' PTS ' + (p.st.reb / gp).toFixed(1) + ' REB ' + (p.st.ast / gp).toFixed(1) + ' AST' : 'NO GAMES YET') + '</b></div></div></div>' +
-      '<div class="rt">' + CK.RKEYS.map(k => '<div class="rr"><span>' + CK.RATING_NAMES[k] + '</span>' + pips(p.r[k]) + '<b>' + p.r[k] + '</b>' + (mine && !opts ? '<button class="tr" data-k="' + k + '" ' + (p.r[k] >= 10 ? 'disabled' : '') + '>+1 <small>' + O.trainCost(p, k) + ' CC</small></button>' : '') + '</div>').join('') + '</div>' +
-      (mine && !opts ? '<div class="look">LOOK <button class="btn sm alt" id="lskin">SKIN TONE</button><button class="btn sm alt" id="lhair">HAIR</button><button class="btn sm alt" id="lhc">HAIR COLOR</button></div>' : '') +
-      '<div class="mor">MORALE ' + bar(p.morale, p.morale < 40 ? '#ff4d4d' : p.morale < 65 ? '#ffd23f' : '#3dff6a') + '</div>' +
-      '<div class="sl">POTENTIAL ' + UI.stars(p.potLo == null || p.scout || mine || p.tm >= 0 ? p.pot : (p.potLo + p.potHi) / 2) + '</div>' +
-      '<div class="sl">CONTRACT ' + U.money(p.sal) + ' / ' + Math.max(0, p.yrs) + ' YR' + (p.yrs === 1 ? '' : 'S') + '</div>' +
+      '<div class="pcs">' + UI.stars(L.stars(p)) + '</div><div class="pcl">LV ' + (p.lvl || 1) + '</div></div>' +
+      '<div class="pcr"><div class="pcmeta">' + (t ? U.esc(t.city.toUpperCase()) : 'FREE AGENT') + ' / ' + ({ PG: 'POINT GUARD', SG: 'SHOOTING GUARD', SF: 'SMALL FORWARD', PF: 'POWER FORWARD', C: 'CENTER' }[p.pos] || p.pos) + ' / ' + Math.floor(p.ht / 12) + "'" + (p.ht % 12) + '" / AGE ' + p.age + '</div>' +
+      '<div class="pcchips">' + good.map(k => '<span class="chg">' + GOOD[k] + '</span>').join('') + bad.map(k => '<span class="chb">' + BAD[k] + '</span>').join('') + (p.inj ? '<span class="chb">OUT ' + p.inj + ': ' + U.esc((p.injName || 'INJURED').toUpperCase()) + '</span>' : '') + '</div>' +
+      '<div class="pcbest">BEST AT <b>' + CK.RATING_NAMES[best[0]] + '</b> AND <b>' + CK.RATING_NAMES[best[1]] + '</b></div>' +
+      '<div class="pcm"><span>OVERALL</span><b class="ovr">' + L.ovr(p).toFixed(1) + '</b><span>POTENTIAL</span>' + UI.stars(p.potLo == null || p.scout || mine || p.tm >= 0 ? p.pot : (p.potLo + p.potHi) / 2) + '</div>' +
+      (mine ? '<div class="pcm"><span>LEVEL ' + (p.lvl || 1) + '</span><div class="cbar"><i style="width:' + xpPct + '%;background:#7cd6ff"></i></div><b>' + p.xp + '/' + need + ' XP</b></div>' : '') +
+      '<div class="pcm"><span>MOOD</span><div class="cbar"><i style="width:' + p.morale + '%;background:' + (p.morale < 40 ? '#ff4d4d' : p.morale < 62 ? '#ffd23f' : '#3dff6a') + '"></i></div><b>' + mood + '</b></div>' +
+      '<div class="pcm"><span>CONTRACT</span><b>' + U.money(p.sal) + ' x ' + Math.max(0, p.yrs) + ' YR' + (p.yrs === 1 ? '' : 'S') + (p.yrs <= 1 && p.tm >= 0 ? ' <em class="cy">CONTRACT YEAR</em>' : '') + '</b></div>' +
+      (canExt ? '<div class="pcext">' + (FO.willExtend(p) ? 'EXTEND: ASKS ' + U.money(FO.extendAsk(p)) + '/YR ' + [1, 2, 3, 4].map(y => '<button class="btn sm" data-ext="' + y + '">+' + y + ' YR</button>').join('') : '<span class="bad">TOO UNHAPPY TO TALK ABOUT A NEW DEAL</span>') + '</div>' : '') +
+      '</div></div>' +
+      '<div class="rt2">' + keys.map(k => '<div class="rr2' + (CK.LVL_KEYS.includes(k) ? '' : ' nl') + '"><span>' + CK.RATING_NAMES[k] + '</span><div class="rbar"><i style="width:' + p.r[k] * 10 + '%;background:' + rcol(p.r[k]) + '"></i></div><b style="color:' + rcol(p.r[k]) + '">' + p.r[k] + '</b>' + (edit ? '<button class="tr" data-k="' + k + '" ' + (p.r[k] >= 10 ? 'disabled' : '') + '>+1<small>' + O.trainCost(p, k) + ' CC</small></button>' : '') + '</div>').join('') + '</div>' +
+      (edit ? '<div class="look">LOOK <button class="btn sm alt" id="lskin">SKIN TONE</button><button class="btn sm alt" id="lhair">HAIR</button><button class="btn sm alt" id="lhc">HAIR COLOR</button></div>' : '') +
       '<table class="box"><tr><th></th><th>GP</th><th>PPG</th><th>RPG</th><th>APG</th><th>FG%</th><th>3P%</th></tr>' +
-      ['st', 'car'].map(k => { const s = p[k], n = Math.max(1, s.gp); return '<tr><td>' + (k === 'st' ? 'SEASON' : 'CAREER') + '</td><td>' + s.gp + '</td><td>' + (s.pts / n).toFixed(1) + '</td><td>' + (s.reb / n).toFixed(1) + '</td><td>' + (s.ast / n).toFixed(1) + '</td><td>' + (s.fga ? Math.round(s.fgm / s.fga * 100) : 0) + '</td><td>' + (s.tpa ? Math.round(s.tpm / s.tpa * 100) : 0) + '</td></tr>'; }).join('') + '</table>' +
-      (mine && !opts ? '<div class="acts">' + (me.start.includes(p.id) ? '<span class="isst">STARTER</span>' : '<button class="btn alt sm" id="mkst">MAKE STARTER</button>') + '<button class="btn alt sm red" id="rel">RELEASE</button></div>' : '');
+      ['st', 'car'].map(k => { const st = p[k], n = Math.max(1, st.gp); return '<tr><td>' + (k === 'st' ? 'SEASON' : 'CAREER') + '</td><td>' + st.gp + '</td><td>' + (st.pts / n).toFixed(1) + '</td><td>' + (st.reb / n).toFixed(1) + '</td><td>' + (st.ast / n).toFixed(1) + '</td><td>' + (st.fga ? Math.round(st.fgm / st.fga * 100) : 0) + '</td><td>' + (st.tpa ? Math.round(st.tpm / st.tpa * 100) : 0) + '</td></tr>'; }).join('') + '</table>' +
+      (edit ? '<div class="acts">' + (me.start.includes(p.id) ? '<span class="isst">STARTER</span>' : '<button class="btn alt sm" id="mkst">MAKE STARTER</button>') + '<button class="btn alt sm red" id="rel">RELEASE</button></div>' : '');
     UI.modal(html, m => {
       m.querySelectorAll('.tr').forEach(b => b.onclick = () => { const err = O.train(p, b.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('swish'); L.save(); UI.toast(p.ln + ' ' + CK.RATING_NAMES[b.dataset.k] + ' +1'); UI.player(p); UI.hub(); });
+      m.querySelectorAll('[data-ext]').forEach(b => b.onclick = () => { const err = FO.extend(p, +b.dataset.ext); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.toast(p.ln + ' extended!'); UI.player(p); UI.hub(); });
       const mk = m.querySelector('#mkst'); if (mk) mk.onclick = () => chooseSwap(p);
       const cyc = (id, k, n) => { const b = m.querySelector(id); if (b) b.onclick = () => { p[k] = (p[k] + 1) % n; L.save(); UI.player(p); }; };
       cyc('#lskin', 'skin', 6); cyc('#lhair', 'hair', 6); cyc('#lhc', 'hc', 6);
@@ -463,27 +477,35 @@
 
   // ---------- trade: pick a team on the left, tap players to swap, meter shows if they say yes ----------
   let tr = { tid: null, give: [], get: [] };
+  const asset = id => id.startsWith('pk') ? O.pick(id) : L.P(id);
   function tabTrade() {
     const S = CK.S, me = L.myTeam();
     if (S.phase !== 'season' || S.deadline) { $('#tab').innerHTML = '<div class="closed">' + icon('trade') + '<b>TRADES CLOSED</b><p>' + (S.deadline ? 'The trade deadline has passed. Trades open again next season.' : 'No trades during the playoffs.') + '</p></div>'; return; }
+    O.ensurePicks(S);
     if (tr.tid == null || tr.tid === S.me) tr.tid = (S.me + 1) % 30;
     const them = L.T(tr.tid);
-    tr.give = tr.give.filter(id => me.roster.includes(id)); tr.get = tr.get.filter(id => them.roster.includes(id));
-    const give = tr.give.map(L.P), get = tr.get.map(L.P);
+    const mineOk = id => id.startsWith('pk') ? (O.pick(id) || {}).own === S.me : me.roster.includes(id);
+    const theirsOk = id => id.startsWith('pk') ? (O.pick(id) || {}).own === them.id : them.roster.includes(id);
+    tr.give = tr.give.filter(mineOk); tr.get = tr.get.filter(theirsOk);
+    const give = tr.give.map(asset), get = tr.get.map(asset);
     const ev = O.evalTrade(give, get, them.id);
     const col = ev.pct >= 100 ? '#3dff6a' : ev.pct >= 70 ? '#ffd23f' : '#ff4d4d';
     const dl = Math.max(0, Math.floor(S.len * 0.6) - S.round);
-    const row = (p, t, sel, side) => '<div class="tp2 ' + (sel ? 'sel' : '') + (p.inj ? ' hurt' : '') + '" data-id="' + p.id + '" data-s="' + side + '">' + UI.posBadge(p.pos) + UI.portrait(p, t, 26) + '<div class="tpn"><b>' + U.esc(L.short(p).toUpperCase()) + '</b><span>' + p.age + ' YRS / ' + U.money(p.sal) + ' x' + Math.max(0, p.yrs) + (p.inj ? ' / OUT ' + p.inj : '') + '</span></div>' + UI.stars(L.stars(p)) + '</div>';
+    const row = (p, t, sel, side) => { const tag = side === 'get' ? O.protectedTag(p, them) : ''; return '<div class="tp2 ' + (sel ? 'sel' : '') + (p.inj ? ' hurt' : '') + '" data-id="' + p.id + '" data-s="' + side + '">' + UI.posBadge(p.pos) + UI.portrait(p, t, 26) + '<div class="tpn"><b>' + U.esc(L.short(p).toUpperCase()) + (tag ? ' <em class="ptag">' + tag + '</em>' : '') + '</b><span>' + p.age + ' YRS / ' + U.money(p.sal) + ' x' + Math.max(0, p.yrs) + ' / POT ' + p.pot + (p.inj ? ' / OUT ' + p.inj : '') + '</span></div>' + UI.stars(L.stars(p)) + '</div>'; };
+    const prow2 = (k, sel, side) => '<div class="tp2 pk ' + (sel ? 'sel' : '') + '" data-id="' + k.id + '" data-s="' + side + '"><span class="pkb">' + (k.rd === 1 ? '1ST' : '2ND') + '</span><div class="tpn"><b>' + O.pickLabel(k) + ' PICK</b><span>' + O.pickProj(k) + ' / BECOMES A DRAFTED ROOKIE</span></div></div>';
+    const list = (t, side, sel) => L.roster(t).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => row(p, t, sel.includes(p.id), side)).join('') + '<div class="tlh">DRAFT PICKS</div>' + (O.picksOf(t.id).map(k => prow2(k, sel.includes(k.id), side)).join('') || '<div class="tlh dim">NONE</div>');
+    const mode = O.mode(them);
     $('#tab').innerHTML = '<div class="trade2">' +
       '<div class="tteams">' + S.teams.filter(t => t.id !== S.me).map(t => '<button class="tt2 ' + (t.id === them.id ? 'sel' : '') + '" data-t="' + t.id + '" style="--c:' + t.c1 + '">' + (UI.logo(t, 'sm') || '') + '<b>' + t.ab + '</b><small>' + rec(t) + '</small></button>').join('') + '</div>' +
-      '<div class="tcol"><div class="th" style="--c:' + them.c1 + '">' + (UI.logo(them, 'sm') || '') + 'YOU GET <small>' + U.esc((them.name || them.city).toUpperCase()) + '</small></div><div class="tl">' + L.roster(them).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => row(p, them, tr.get.includes(p.id), 'get')).join('') + '</div></div>' +
-      '<div class="tcol"><div class="th" style="--c:' + me.c1 + '">' + (UI.logo(me, 'sm') || '') + 'YOU GIVE <small>' + U.esc((me.name || me.city).toUpperCase()) + '</small></div><div class="tl">' + L.roster(me).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => row(p, me, tr.give.includes(p.id), 'give')).join('') + '</div></div>' +
+      '<div class="tcol"><div class="th" style="--c:' + them.c1 + '">' + (UI.logo(them, 'sm') || '') + 'YOU GET <small class="md ' + mode + '">' + mode.toUpperCase() + '</small></div><div class="tl">' + list(them, 'get', tr.get) + '</div></div>' +
+      '<div class="tcol"><div class="th" style="--c:' + me.c1 + '">' + (UI.logo(me, 'sm') || '') + 'YOU GIVE <small>' + U.esc((me.name || me.city).toUpperCase()) + '</small></div><div class="tl">' + list(me, 'give', tr.give) + '</div></div>' +
       '<div class="tdeal"><div class="tm2"><span>WILL THEY ACCEPT?</span><div class="cbar big"><i style="width:' + ev.pct + '%;background:' + col + '"></i></div><b style="color:' + col + '">' + ev.pct + '%</b></div>' +
-      '<div class="terr">' + (ev.err && (give.length || get.length) ? ev.err : give.length || get.length ? (ev.ok ? 'They like it.' : 'Add more value or take less.') : 'Tap players on both sides. Up to 3 each.') + '</div>' +
-      '<button class="btn" id="prop" ' + (ev.ok ? '' : 'disabled') + '>PROPOSE</button><small class="dl">' + (dl ? 'DEADLINE IN ' + dl + ' GAME' + (dl > 1 ? 'S' : '') : 'LAST GAME BEFORE THE DEADLINE') + '</small></div></div>';
+      '<div class="terr">' + (ev.err && (give.length || get.length) ? ev.err : give.length || get.length ? (ev.ok ? 'They like it.' : 'Add more value or take less.') : O.modeText[mode]) + '</div>' +
+      '<button class="btn alt" id="mkw" ' + (get.length ? '' : 'disabled') + '>MAKE IT WORK</button><button class="btn" id="prop" ' + (ev.ok ? '' : 'disabled') + '>PROPOSE</button><small class="dl">' + (dl ? 'DEADLINE IN ' + dl + ' GAME' + (dl > 1 ? 'S' : '') : 'LAST GAME BEFORE THE DEADLINE') + '</small></div></div>';
     const sel = $('.tt2.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' });
     click('.tt2', el => { tr = { tid: +el.dataset.t, give: tr.give, get: [] }; tabTrade(); });
-    click('.tp2', el => { const arr = tr[el.dataset.s]; const i = arr.indexOf(el.dataset.id); if (i >= 0) arr.splice(i, 1); else if (arr.length < 3) arr.push(el.dataset.id); tabTrade(); });
+    click('.tp2', el => { const arr = tr[el.dataset.s]; const i = arr.indexOf(el.dataset.id); if (i >= 0) arr.splice(i, 1); else if (arr.length < 5) arr.push(el.dataset.id); tabTrade(); });
+    click('#mkw', () => { const r = O.balance(give, get, them.id); if (!r) return UI.toast('Nothing on your side gets this done.', true); tr.give = r.map(a => a.id); tabTrade(); UI.toast('Here is what it would take'); });
     click('#prop', () => {
       if (!ev.ok) return;
       O.doTrade(give, get, them.id); tr.give = []; tr.get = []; L.save(); CK.SFX.play('cheer'); UI.toast('Trade done!'); UI.hub('roster');
@@ -510,7 +532,7 @@
       h += '<div class="staffs">' + role('oc', 'OFFENSIVE COACH', 'Your team shoots better and scores more in sims.') + role('dc', 'DEFENSIVE COACH', 'The other team shoots worse against you.') + '</div>';
     } else if (foView === 'earn') {
       const rows = [['WIN A GAME', '+3'], ['LOSE A GAME', '+1'], ['HOME CROWD', 'FANS + ARENA'], ['HIGHLIGHTS (DUNKS, SPLASH 3S, BLOCKS)', 'UP TO +3'], ['PERFECT RELEASES (GREEN)', 'UP TO +2'], ['BLOWOUT WIN (15+)', '+1'], ['CLUTCH WIN (3 OR LESS)', '+1'], ['HOLD THEM UNDER 96', '+1'], ['30-POINT NIGHT', '+1'], ['WIN STREAK 3 / 5 / 8 / 12', '+2'], ['PLAYOFF WIN', '+4'], ['MAKE THE PLAYOFFS / WIN THE TITLE', '+6 / +20'], ['SOME DILEMMAS + SPONSORS', 'VARIES']];
-      h += '<div class="earn2"><div class="eh"><b>' + S.cc + '</b><span>COACH CREDITS TO SPEND</span><small>' + (S.ccLife || 0) + ' EARNED IN YOUR CAREER</small></div><div class="el">' + rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('') + '</div><p class="dim">Simmed games pay 60%. Long seasons pay less per game so it evens out. Spend CC on facilities, coaches, and training players (tap a player on your roster).</p></div>';
+      h += '<div class="earn2"><div class="eh">' + UI.coin() + '<b>' + S.cc + '</b><span>COACH CREDITS TO SPEND</span><small>' + (S.ccLife || 0) + ' EARNED IN YOUR CAREER</small></div><div class="el">' + rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('') + '</div><p class="dim">Simmed games pay 60%. Long seasons pay less per game so it evens out. Spend CC on facilities, coaches, and training players (tap a player on your roster).</p></div>';
     } else {
       h += '<div class="sets">' +
         '<div class="setrow">DIFFICULTY<div class="seg" id="sdif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (S.diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
@@ -564,7 +586,7 @@
   UI.resign = () => {
     const S = CK.S, me = L.myTeam(), ex = O.expiring();
     app().innerHTML = '<div class="page"><h2>RE-SIGN PLAYERS</h2><div class="sub">OFFSEASON ' + S.season + ' / PAYROLL ' + U.money(L.payroll(me) - ex.reduce((a, p) => a + p.sal, 0)) + ' / CAP ' + U.money(CK.CAP) + '</div>' +
-      (ex.length ? ex.map(p => '<div class="rs">' + prow(p, me) + '<div class="rsb"><span>ASKS ' + U.money(O.ask(p)) + '/YR</span>' + [1, 2, 3, 4].map(y => '<button class="btn sm" data-id="' + p.id + '" data-y="' + y + '">' + y + 'YR</button>').join('') + '<button class="btn sm alt red" data-id="' + p.id + '" data-y="0">LET GO</button></div></div>').join('') : '<p class="dim">No expiring contracts this year.</p>') +
+      (ex.length ? ex.map(p => '<div class="rs">' + prow(p, me) + '<div class="rsb">' + (p.morale < 35 ? '<span class="bad">MOOD: ' + CK.FO.moodWord(p.morale) + '. HE WILL NOT RE-SIGN.</span>' : '<span>MOOD: ' + CK.FO.moodWord(p.morale) + ' / ASKS ' + U.money(O.ask(p)) + '/YR' + (p.morale >= 80 ? ' (HOMETOWN DISCOUNT)' : '') + '</span>' + [1, 2, 3, 4].map(y => '<button class="btn sm" data-id="' + p.id + '" data-y="' + y + '">' + y + 'YR</button>').join('')) + '<button class="btn sm alt red" data-id="' + p.id + '" data-y="0">LET GO</button></div></div>').join('') : '<p class="dim">No expiring contracts this year.</p>') +
       '<button class="btn" id="todraft" ' + (ex.length ? 'disabled' : '') + '>' + (ex.length ? 'DECIDE ON EVERY PLAYER' : 'GO TO THE DRAFT') + '</button></div>';
     click('.rsb .btn', el => {
       const p = L.P(el.dataset.id), y = +el.dataset.y;

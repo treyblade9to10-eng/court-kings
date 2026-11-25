@@ -37,6 +37,7 @@
     if (!S.pool || S.pool.season !== S.season) { const keep = CK.S; CK.S = S; FO.newPool(); CK.S = keep; }
     if (S.ccLife == null) S.ccLife = S.cc;
     if (!S.show) S.show = [];
+    if (S.teams && CK.OFF.ensurePicks) CK.OFF.ensurePicks(S);
   };
   const oldLoad = L.load;
   L.load = () => { const ok = oldLoad(); if (ok) FO.ensure(CK.S); return ok; };
@@ -97,4 +98,69 @@
 
   // ---------- owner goal ----------
   FO.goal = () => { const S = CK.S; return Math.max(1, Math.round(O.expectedWins() * S.len)); };
+})(window.CK);
+
+// ---------- XP, level-ups, in-season growth, morale, contracts ----------
+(function (CK) {
+  const U = CK.U, L = CK.L, FO = CK.FO;
+  FO.xpNeed = p => 70 + (p.lvl || 1) * 25;
+  // young + high potential players learn faster, old players slower
+  FO.xpMul = p => (0.65 + p.pot * 0.14) * (p.age <= 22 ? 1.35 : p.age <= 25 ? 1.15 : p.age <= 29 ? 1 : p.age <= 32 ? 0.8 : 0.6);
+  FO.gameXP = (b, won, live) => Math.round((b.pts + b.reb * 1.2 + b.ast * 1.6 + b.stl * 3 + b.blk * 3 + (b.tpm || 0) * 1.5 + (won ? 6 : 2)) * (live ? 1.3 : 1));
+  // after each of your games: XP for everyone who played, level-ups become news cards where you pick the skill
+  FO.afterGame = (g, res) => {
+    const S = CK.S, me = g.me, ups = [];
+    L.roster(me).forEach(p => {
+      CK.fillRatings(p);
+      const b = res.box[p.id]; if (!b || !b.gp) return;
+      const gain = Math.round(FO.gameXP(b, res.won, res.played) * 0.35 * FO.xpMul(p) * U.clamp(20 / (S.len || 20), 0.35, 1.3));
+      p.xp += gain; p.lastXP = gain;
+      while (p.xp >= FO.xpNeed(p)) { p.xp -= FO.xpNeed(p); p.lvl++; p.pending = (p.pending || 0) + 1; ups.push(p); }
+    });
+    [...new Set(ups)].forEach(p => {
+      const opts = CK.LVL_KEYS.filter(k => p.r[k] < 10);
+      if (!opts.length) { p.pending = 0; return; }
+      L.inbox('LEVEL UP: ' + L.name(p), L.name(p) + ' hit level ' + p.lvl + '. Pick one skill to raise by 1.', opts.map(k => ({ label: CK.RATING_NAMES[k] + ' ' + p.r[k] + ' > ' + (p.r[k] + 1), fx: { lvlUp: k }, pid: p.id })), 'lvl');
+    });
+    FO.morale(g, res);
+  };
+  // player morale: wins, minutes, big games, contract year; team morale is the roster average
+  FO.morale = (g, res) => {
+    const S = CK.S, me = g.me, lk = S.fac.lock || 1;
+    const ro = L.roster(me), start = new Set(me.start), cut = Math.min(...me.start.map(L.P).filter(Boolean).map(L.ovr));
+    ro.forEach(p => {
+      let d = res.won ? (lk >= 2 ? 1 + Math.floor(lk / 2) : 1) : (lk >= 3 ? 0 : -1);
+      const b = res.box[p.id];
+      if (b && b.pts >= 20) d += 2;
+      if (!start.has(p.id) && L.ovr(p) >= cut && !p.inj) d -= 2;          // thinks he should start
+      if (start.has(p.id)) d += 0.5;
+      if (p.yrs <= 1 && p.morale < 50) d -= 0.5;                           // contract year, unhappy
+      p.morale = U.clamp(Math.round(p.morale + d), 0, 100);
+    });
+  };
+  FO.teamMorale = t => { const ro = L.roster(t || L.myTeam()); return ro.length ? Math.round(ro.reduce((a, p) => a + p.morale, 0) / ro.length) : 50; };
+  FO.moodWord = m => m >= 80 ? 'FIRED UP' : m >= 62 ? 'HAPPY' : m >= 45 ? 'OKAY' : m >= 30 ? 'UPSET' : 'WANTS OUT';
+  // in-season growth for the whole league: young players with potential above their level keep getting better
+  FO.growTick = () => {
+    const S = CK.S;
+    Object.values(S.players).forEach(p => {
+      if (p.tm < 0) return; CK.fillRatings(p);
+      const gap = p.pot - L.stars(p);
+      if (p.age <= 25 && gap > 0.4 && U.chance(U.clamp(0.18 + gap * 0.16, 0, 0.75) * (p.tm === S.me ? 0.5 : 1))) {
+        const ks = CK.LVL_KEYS.filter(k => p.r[k] < 10).sort((a, b) => p.r[a] - p.r[b]).slice(0, 3); const k = U.pick(ks);
+        if (k) { p.r[k]++; if (p.tm === S.me) L.inbox(L.short(p) + ' is getting better', L.name(p) + ' improved his ' + CK.RATING_NAMES[k].toLowerCase() + ' in practice (' + p.r[k] + ').'); }
+      } else if (p.age >= 32 && U.chance(0.12)) { const k = U.pick(['ath', 'sta']); if (p.r[k] > 1) p.r[k]--; }
+    });
+  };
+  // contracts: extend players in their last year during the season (Retro Bowl style)
+  FO.extendAsk = p => { const a = L.salaryFor(p) * U.clamp(1.3 - p.morale / 160, 0.82, 1.2); return Math.round(a * 10) / 10; };
+  FO.willExtend = p => p.morale >= 35;
+  FO.extend = (p, yrs) => {
+    const S = CK.S, me = L.myTeam(), ask = FO.extendAsk(p);
+    if (!FO.willExtend(p)) return L.short(p) + ' is unhappy and will not talk.';
+    if (L.payroll(me) - p.sal + ask > CK.APRON) return 'That puts you over the ' + U.money(CK.APRON) + ' apron.';
+    p.sal = ask; p.yrs = yrs + 1; p.morale = Math.min(100, p.morale + 10); p.ext = S.season;
+    L.inbox(L.short(p) + ' signs an extension', L.name(p) + ': ' + yrs + ' more year' + (yrs > 1 ? 's' : '') + ' at ' + U.money(ask) + ' per year.');
+    return null;
+  };
 })(window.CK);

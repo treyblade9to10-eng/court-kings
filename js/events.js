@@ -114,6 +114,7 @@
       const ok = give && get && give.tm === S.me && get.tm === fx.trade.tid && !S.deadline && S.phase === 'season' && !O.evalTrade([give], [get], fx.trade.tid).err;
       if (ok) { O.doTrade([give], [get], fx.trade.tid); out.push('Trade done: ' + get.ln + ' joins'); } else out.push('The deal fell through');
     }
+    if (fx.lvlUp && p && p.r[fx.lvlUp] < 10) { p.r[fx.lvlUp]++; p.pending = Math.max(0, (p.pending || 1) - 1); out.push(p.ln + ' ' + CK.RATING_NAMES[fx.lvlUp] + ' ' + p.r[fx.lvlUp]); }
     if (fx.note) out.push(fx.note);
     return out;
   };

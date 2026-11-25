@@ -66,7 +66,7 @@
   function k_ath_drop(p) { return p.age >= 31 && U.chance(0.4); }
 
   // ---------- contracts ----------
-  O.ask = p => { let a = L.salaryFor(p); const S = CK.S; if (p.tm === S.me) a *= U.clamp(1.25 - p.morale / 200 - S.fans / 600, 0.8, 1.15); return Math.round(a * 10) / 10; };
+  O.ask = p => { let a = L.salaryFor(p); const S = CK.S; if (p.tm === S.me) a *= U.clamp(1.25 - p.morale / 200 - S.fans / 600, 0.8, 1.15) * (p.morale >= 80 ? 0.88 : 1); return Math.round(a * 10) / 10; };
   O.expiring = () => L.roster(L.myTeam()).filter(p => p.yrs <= 0);
   O.resign = (p, yrs) => { p.sal = O.ask(p); p.yrs = yrs; p.morale = Math.min(100, p.morale + 5); };
   O.release = p => { const t = L.T(p.tm); t.roster = t.roster.filter(x => x !== p.id); t.start = t.start.filter(x => x !== p.id); p.tm = -2; CK.S.fa.push(p.id); p.sal = L.salaryFor(p); };
@@ -93,7 +93,9 @@
     const order = S.teams.slice().sort((a, b) => L.pct(a) - L.pct(b) || (a.pf - a.pa) - (b.pf - b.pa)).map(t => t.id);
     // champion picks last
     const ch = S.playoff && S.playoff.champ; if (ch != null) { order.splice(order.indexOf(ch), 1); order.push(ch); }
-    S.draft = { pros, order: order.concat(order), pick: 0, picks: [] };
+    O.ensurePicks(S);
+    const owner = (orig, rd) => { const k = S.dpicks.find(x => x.yr === S.season + 1 && x.rd === rd && x.orig === orig); return k ? k.own : orig; };
+    S.draft = { pros, order: order.map(o => owner(o, 1)).concat(order.map(o => owner(o, 2))), orig: order.concat(order), pick: 0, picks: [] };
   };
   O.prospectValue = p => L.ovr(p) + (p.scout ? p.pot : (p.potLo + p.potHi) / 2) * 0.7 - (p.age - 19) * 0.2;
   O.draftPlayer = (tid, pid) => {
@@ -117,6 +119,7 @@
     const S = CK.S, d = S.draft;
     d.pros.forEach(id => { const p = L.P(id); p.tm = -2; p.sal = 1; S.fa.push(id); });
     d.pros = [];
+    S.dpicks = (S.dpicks || []).filter(k => k.yr > S.season + 1);
   };
 
   // ---------- free agency ----------
@@ -166,29 +169,94 @@
   O.facCost = k => CK.FO.cost(k);
   O.upgrade = k => { const S = CK.S, c = O.facCost(k); if (S.fac[k] >= 5) return 'Already max level.'; if (S.cc < c) return 'Need ' + c + ' Coach Credits.'; S.cc -= c; S.fac[k]++; if (k === 'arena') S.fans = Math.min(100, S.fans + 6); return null; };
 
+  // ---------- draft picks (tradeable; they turn into generated prospects at the draft) ----------
+  O.ensurePicks = S => {
+    S.dpicks = S.dpicks || [];
+    [S.season + 1, S.season + 2].forEach(yr => S.teams.forEach(t => [1, 2].forEach(rd => {
+      const id = 'pk' + yr + '_' + rd + '_' + t.id;
+      if (!S.dpicks.some(k => k.id === id)) S.dpicks.push({ id, yr, rd, orig: t.id, own: t.id });
+    })));
+  };
+  O.pick = id => (CK.S.dpicks || []).find(k => k.id === id);
+  O.picksOf = tid => (CK.S.dpicks || []).filter(k => k.own === tid).sort((a, b) => a.yr - b.yr || a.rd - b.rd);
+  const rankOf = tid => { const S = CK.S; const ord = S.teams.slice().sort((a, b) => L.pct(a) - L.pct(b) || (a.pf - a.pa) - (b.pf - b.pa)); return ord.findIndex(t => t.id === tid) + 1; };
+  O.pickProj = k => {
+    const S = CK.S; if (k.yr !== S.season + 1 || S.round < 2) return k.rd === 1 ? 'FIRST ROUND' : 'SECOND ROUND';
+    const r = rankOf(k.orig);
+    return k.rd === 2 ? 'SECOND ROUND' : r <= 4 ? 'TOP 4 PICK' : r <= 14 ? 'LOTTERY' : r <= 22 ? 'MID FIRST' : 'LATE FIRST';
+  };
+  O.pickLabel = k => k.yr + ' ' + (k.rd === 1 ? '1ST' : '2ND') + (k.orig !== k.own ? ' (' + L.T(k.orig).ab + ')' : '');
+  O.pickBase = k => {
+    const S = CK.S;
+    if (k.rd === 2) return 2.5;
+    if (k.yr !== S.season + 1 || S.round < 2) return 15;
+    const r = rankOf(k.orig); return Math.max(7, 30 - r * 0.8);
+  };
+
   // ---------- trades ----------
   O.tradeValue = p => { const o = L.ovr(p); let v = Math.pow(Math.max(0.5, o - 2), 2.2); v *= p.age <= 23 ? 1.25 : p.age <= 27 ? 1.1 : p.age <= 30 ? 1 : p.age <= 32 ? 0.8 : 0.55; v *= 0.85 + p.pot * 0.05; return v - p.sal * 0.25; };
+  // what a CPU team is trying to do right now
+  O.mode = t => { const gp = t.w + t.l, st = L.teamStars(t), pc = L.pct(t); if (gp >= 4 ? pc >= 0.56 : st >= 3.5) return 'contend'; if (gp >= 4 ? pc <= 0.42 : st <= 2.5) return 'rebuild'; return 'middle'; };
+  O.modeText = { contend: 'CONTENDING: they want players who help now, not picks or projects.', rebuild: 'REBUILDING: they love young players and draft picks, not old stars.', middle: 'IN THE MIDDLE: fair value works, a little youth helps.' };
+  // value of one asset to the CPU team; theirs = it is leaving their team
+  O.assetValue = (a, t, theirs) => {
+    const mode = O.mode(t);
+    if (a.yr) { let v = O.pickBase(a); v *= mode === 'rebuild' ? 1.3 : mode === 'contend' ? 0.75 : 1; if (theirs && a.orig === t.id && a.rd === 1) v *= 1.15; return v; }
+    const p = a; let v = O.tradeValue(p);
+    if (mode === 'contend') v *= L.ovr(p) >= 6 ? 1.15 : p.age <= 23 ? 0.85 : 1;
+    if (mode === 'rebuild') v *= p.age <= 24 ? 1.25 : p.age >= 30 ? 0.7 : 1;
+    if (theirs) {
+      // young high-potential guys, rookies and the franchise player are hard to pry loose
+      if (p.age <= 23 && p.pot >= 4) v *= 1.7;
+      if (p.seasons === 0 || (p.age <= 21)) v *= 1.4;
+      const best = L.roster(t).sort((x, y) => L.ovr(y) - L.ovr(x))[0];
+      if (best === p && p.age <= 27) v *= 1.5;
+    } else {
+      const n = L.roster(t).filter(x => x.pos === p.pos).length;
+      if (n < 2) v *= 1.12; else if (n >= 4) v *= 0.9;
+    }
+    return Math.max(0.3, v);
+  };
+  O.protectedTag = (p, t) => p.age <= 23 && p.pot >= 4 ? 'FRANCHISE PROSPECT' : p.seasons === 0 ? 'ROOKIE' : (L.roster(t).sort((x, y) => L.ovr(y) - L.ovr(x))[0] === p && p.age <= 27 ? 'FACE OF THE TEAM' : '');
   O.evalTrade = (give, get, tid) => {
     const t = L.T(tid), me = L.myTeam();
-    const vg = give.reduce((s, p) => s + O.tradeValue(p), 0), vr = get.reduce((s, p) => s + O.tradeValue(p), 0);
-    const pct = vr <= 0 ? 100 : U.clamp(Math.round(vg / (vr * 1.08) * 100), 0, 100);
-    const myPay = L.payroll(me) - give.reduce((s, p) => s + p.sal, 0) + get.reduce((s, p) => s + p.sal, 0);
-    const thPay = L.payroll(t) + give.reduce((s, p) => s + p.sal, 0) - get.reduce((s, p) => s + p.sal, 0);
+    const gP = give.filter(a => !a.yr), rP = get.filter(a => !a.yr);
+    const vg = give.reduce((s, a) => s + O.assetValue(a, t, false), 0), vr = get.reduce((s, a) => s + O.assetValue(a, t, true), 0);
+    const pct = vr <= 0 ? (vg > 0 ? 100 : 0) : U.clamp(Math.round(vg / (vr * 1.05) * 100), 0, 100);
+    const myPay = L.payroll(me) - gP.reduce((s, p) => s + p.sal, 0) + rP.reduce((s, p) => s + p.sal, 0);
+    const thPay = L.payroll(t) + gP.reduce((s, p) => s + p.sal, 0) - rP.reduce((s, p) => s + p.sal, 0);
     let err = null;
-    if (!give.length || !get.length) err = 'Pick players on both sides.';
+    if (!give.length || !get.length) err = 'Pick something on both sides.';
     else if (myPay > CK.APRON) err = 'You would be over the ' + U.money(CK.APRON) + ' apron.';
     else if (thPay > CK.APRON) err = 'They would be over the apron.';
-    else if (me.roster.length - give.length + get.length > CK.ROSTER_MAX) err = 'Your roster would be too big.';
-    else if (me.roster.length - give.length + get.length < CK.ROSTER_MIN) err = 'Your roster would be too small.';
-    else if (t.roster.length + give.length - get.length > CK.ROSTER_MAX + 1) err = 'Their roster would be too big.';
-    return { pct, err, ok: !err && pct >= 100 };
+    else if (me.roster.length - gP.length + rP.length > CK.ROSTER_MAX) err = 'Your roster would be too big.';
+    else if (me.roster.length - gP.length + rP.length < CK.ROSTER_MIN) err = 'Your roster would be too small.';
+    else if (t.roster.length + gP.length - rP.length > CK.ROSTER_MAX + 1) err = 'Their roster would be too big.';
+    else if (t.roster.length + gP.length - rP.length < CK.ROSTER_MIN) err = 'Their roster would be too small.';
+    return { pct, err, ok: !err && pct >= 100, vg, vr };
   };
   O.doTrade = (give, get, tid) => {
     const t = L.T(tid), me = L.myTeam();
-    give.forEach(p => { me.roster = me.roster.filter(x => x !== p.id); me.start = me.start.filter(x => x !== p.id); t.roster.push(p.id); p.tm = tid; p.morale = 60; });
-    get.forEach(p => { t.roster = t.roster.filter(x => x !== p.id); me.roster.push(p.id); p.tm = me.id; p.morale = 72; });
+    give.forEach(a => { if (a.yr) { a.own = tid; return; } const p = a; me.roster = me.roster.filter(x => x !== p.id); me.start = me.start.filter(x => x !== p.id); t.roster.push(p.id); p.tm = tid; p.morale = 60; });
+    get.forEach(a => { if (a.yr) { a.own = me.id; return; } const p = a; t.roster = t.roster.filter(x => x !== p.id); me.roster.push(p.id); p.tm = me.id; p.morale = 72; });
     L.uniqueNums(me); L.uniqueNums(t); L.autoStarters(t);
     if (me.start.length < 5) L.autoStarters(me);
-    L.inbox('Trade with ' + t.city, 'You sent ' + give.map(L.name).join(', ') + ' and got ' + get.map(L.name).join(', ') + '.');
+    const nm = a => a.yr ? O.pickLabel(a) + ' pick' : L.name(a);
+    L.inbox('Trade with ' + t.city, 'You sent ' + give.map(nm).join(', ') + ' and got ' + get.map(nm).join(', ') + '.');
+  };
+  // "MAKE IT WORK": add the cheapest stuff from your side until they say yes
+  O.balance = (give, get, tid) => {
+    const t = L.T(tid), me = L.myTeam(), out = give.slice();
+    const pool = L.roster(me).filter(p => !out.includes(p)).concat(O.picksOf(me.id).filter(k => !out.includes(k)));
+    for (let n = 0; n < 4; n++) {
+      const ev = O.evalTrade(out, get, tid); if (ev.ok) return out;
+      const need = ev.vr * 1.05 - ev.vg;
+      const c = pool.filter(a => !out.includes(a)).map(a => ({ a, v: O.assetValue(a, t, false) })).filter(x => { const e2 = O.evalTrade(out.concat([x.a]), get, tid); return !e2.err || /both sides/.test(e2.err); });
+      if (!c.length) return null;
+      const enough = c.filter(x => x.v >= need).sort((x, y) => x.v - y.v)[0];
+      out.push((enough || c.sort((x, y) => y.v - x.v)[0]).a);
+      if (out.filter(a => !a.yr).length > 4) return null;
+    }
+    return O.evalTrade(out, get, tid).ok ? out : null;
   };
 })(window.CK);

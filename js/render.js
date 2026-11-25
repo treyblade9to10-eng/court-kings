@@ -135,7 +135,8 @@
     ctx.save();
     if (st.shake > 0) ctx.translate(Math.round(U.rand(-1, 1) * st.shake * 3), Math.round(U.rand(-1, 1) * st.shake * 2));
     ctx.drawImage(bg, -OX - Math.round(E.cam), 0);
-    const hype = info && info.hype || 0;
+    const clutch = !!(info && info.clutch);
+    const hype = Math.max(info && info.hype || 0, clutch ? 0.75 + 0.25 * Math.sin(st.t * 7) : 0);
     drawCrowd(ctx, st.t, hype);
     const act = (st.dir || 1) > 0 ? 0 : 1;   // which end the offense attacks
     hoopBack(ctx, st, 0, act === 0); hoopBack(ctx, st, 1, act === 1);
@@ -160,6 +161,14 @@
     if (st.phase === 'ft' && st.ftState === 'meter' && (st.cfg.user === 'off' || st.ftMine)) ftMeter(ctx, st);
     st.ents.forEach(e => { if (e.labelT > 0 && e.label) { const [x, y] = proj(e.x, e.y, e.z); const col = e.label === 'PERFECT' ? '#3dff6a' : e.label === 'GOOD' ? '#ffd23f' : '#ff7070'; const w = U.pixW(e.label); U.pixText(ctx, e.label, Math.round(x - w / 2) + 1, Math.round(y - 44) + 1, '#000'); U.pixText(ctx, e.label, Math.round(x - w / 2), Math.round(y - 44), col); } });
     ctx.restore();
+    // clutch: the whole arena pulses (gold/red glow from the edges on the beat)
+    if (clutch) {
+      const a = 0.16 + 0.14 * Math.max(0, Math.sin(st.t * 7));
+      const gr = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.62);
+      gr.addColorStop(0, 'rgba(255,80,40,0)'); gr.addColorStop(1, 'rgba(255,70,30,' + a.toFixed(3) + ')');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+      if (((st.t * 3.5) | 0) % 2) { ctx.fillStyle = 'rgba(255,210,63,0.9)'; ctx.fillRect(0, 0, W, 2); ctx.fillRect(0, H - 2, W, 2); }
+    }
     // off-screen arrow for the player you control
     const u = st.user;
     if (u) { const [ux, uy] = proj(u.x, u.y, 0); if (ux < 4 || ux > W - 4) { const ax = ux < 4 ? 4 : W - 8; ctx.fillStyle = '#ffd23f'; for (let i = 0; i < 4; i++) ctx.fillRect(ax + (ux < 4 ? i : 3 - i), Math.round(uy) - 12 - i, 1, i * 2 + 1); } }

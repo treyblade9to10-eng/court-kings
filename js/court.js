@@ -52,6 +52,8 @@
       if (cfg.inbAt) { const [x, y] = E.toL(cfg.inbAt[0], cfg.inbAt[1], st.dir); pg.x = pg.tx = (x < 0 ? -1 : 1) * 24; pg.y = pg.ty = U.clamp(y, 3, 90); }
       else { pg.x = pg.tx = U.pick([-4, 4]); pg.y = pg.ty = 91.5; }
     }
+    // after a make the CPU walks it up for a moment so your team can get back (no cheap fast breaks off a take-out)
+    st.jogT = cfg.inbound && !cfg.inbAt && cfg.user === 'def' && !cfg.both ? 1.3 : 0;
     st.ball = { s: 'hold', h: pg, x: pg.x, y: pg.y, z: 3, vx: 0, vy: 0, vz: 0, t: 0 };
     pg.ball = true;
     st.uo = cfg.user === 'off' || st.both ? pg : null;
@@ -67,7 +69,7 @@
     return {
       pl, id: pl.id, side, i, x, y, z: 0, vx: 0, vy: 0, vz: 0, tx: x, ty: y, face: 1, run: 0,
       spd: 12.5 + r.ath * 0.55 + (pl.pos === 'PG' ? 0.6 : pl.pos === 'C' ? -0.8 : 0), state: 'run', stT: 0, stun: 0,
-      ht: pl.ht, fire: false, cd: 0, jumpT: 0
+      ht: pl.ht, fire: false, cd: 0, jumpT: 0, en: E.st && E.st.cfg && E.st.cfg.energy && E.st.cfg.energy[pl.id] != null ? E.st.cfg.energy[pl.id] : 1
     };
   }
   const offE = () => E.st.ents.filter(e => e.side === 0);
@@ -104,7 +106,7 @@
   E.update = (dt, IN, IN2) => {
     const st = E.st; if (!st) return;
     const cu = st.cfg.user, inOff = cu === 'off' ? IN : st.both ? IN2 : null, inDef = cu === 'def' ? IN : st.both ? IN2 : null;
-    st.t += dt; st.shake = Math.max(0, st.shake - dt * 2.5);
+    st.t += dt; st.shake = Math.max(0, st.shake - dt * 2.5); if (st.jogT > 0) st.jogT -= dt;
     if (st.later.length) { st.later.forEach(l => l.t -= dt); const due = st.later.filter(l => l.t <= 0); st.later = st.later.filter(l => l.t > 0); due.forEach(l => l.fn()); }
     const b = st.ball;
     if (st.phase === 'live') {
@@ -184,7 +186,7 @@
     let best = null, bs = -1e9; const m = Math.hypot(jx, jy);
     offE().forEach(t => {
       if (t === e) return;
-      let s = E.openness(t) * 2 - Math.hypot(t.x - e.x, t.y - e.y) * 0.15 + (is3(t.x, t.y) ? t.pl.r.sht * 0.3 : (dHoop(t) < 9 ? 4 : 0));
+      let s = E.openness(t) * 2 - Math.hypot(t.x - e.x, t.y - e.y) * 0.15 + (is3(t.x, t.y) ? t.pl.r.thr * 0.3 : (dHoop(t) < 9 ? 4 : 0));
       if (m > 0.3) { const dx = t.x - e.x, dy = t.y - e.y, l = Math.hypot(dx, dy) || 1; s += ((dx * jx + dy * jy) / (l * m)) * 12; }
       if (s > bs) { bs = s; best = t; }
     });
@@ -198,7 +200,7 @@
     const st = E.st; fx('dribble');
     const [d, dd] = nearestDef(e);
     let hx = HX - e.x, hy = HY - e.y; const hl = Math.hypot(hx, hy) || 1; hx /= hl; hy /= hl;
-    const sk = (e.pl.r.pas - (d ? d.pl.r.def : 5)) * 0.03 + (e.pl.r.ath - (d ? d.pl.r.ath : 5)) * 0.015 + (e.fire ? 0.1 : 0);
+    const sk = (e.pl.r.drb - (d ? d.pl.r.def : 5)) * 0.03 + (e.pl.r.ath - (d ? d.pl.r.ath : 5)) * 0.015 + (e.fire ? 0.1 : 0);
     const close = d && dd < 4 && d.stun <= 0;
     const ankles = mul => { if (close && Math.random() < U.clamp((0.06 + sk) * mul, 0.03, 0.5) / (e.side === 0 ? st.aiMul.def : 1)) { d.stun = 1.1; d.fell = true; pop('ANKLES!', 0, 34, '#ffd23f', 3); st.shake = 0.5; fx('ankles'); st.hl.push('ankles'); say(NM(e) + ' SENDS ' + NM(d) + ' TO THE FLOOR!'); return true; } return false; };
     if (kind === 'spin') {
@@ -231,7 +233,7 @@
     if (Math.hypot(dx, dy) < 0.3 && d) { dx = -(d.y - e.y); dy = (d.x - e.x); if (Math.random() < 0.5) { dx = -dx; dy = -dy; } }
     const l = Math.hypot(dx, dy) || 1; e.vx = dx / l * e.spd * 1.55; e.vy = dy / l * e.spd * 1.55; e.burst = 0.35;
     if (d && dd < 3.8 && d.stun <= 0) {
-      const p = 0.06 + (e.pl.r.pas - d.pl.r.def) * 0.03 + (e.pl.r.ath - d.pl.r.ath) * 0.015 + (e.fire ? 0.12 : 0) - (inFront(d, e) ? 0 : 0.05);
+      const p = 0.06 + (e.pl.r.drb - d.pl.r.def) * 0.03 + (e.pl.r.ath - d.pl.r.ath) * 0.015 + (e.fire ? 0.12 : 0) - (inFront(d, e) ? 0 : 0.05);
       if (Math.random() < U.clamp(p, 0.04, 0.5) / (e.side === 0 ? st.aiMul.def : 1)) {
         d.stun = 1.1; d.fell = true; pop('ANKLES!', 0, 34, '#ffd23f', 3); st.shake = 0.5; fx('ankles'); st.hl.push('ankles'); say(NM(e) + ' SENDS ' + NM(d) + ' TO THE FLOOR!');
       } else if (Math.random() < 0.05 * (d.pl.r.def / 10)) {
@@ -245,7 +247,7 @@
     if (b.s !== 'hold' || b.h.side === d.side) return;
     const h = b.h, dd = Math.hypot(h.x - d.x, h.y - d.y);
     if (dd > 4) return;
-    let p = 0.17 + d.pl.r.def * 0.025 - h.pl.r.pas * 0.018 + (h.state === 'shoot' ? -0.3 : 0);
+    let p = 0.17 + d.pl.r.def * 0.025 - h.pl.r.drb * 0.018 + (h.state === 'shoot' ? -0.3 : 0);
     if (!isUser) p *= 0.8;
     if (Math.random() < U.clamp(p, 0.03, 0.45)) stealBall(d, h);
     else if (isUser && Math.random() < 0.13) { pop('REACH-IN FOUL', 0, 30, '#ffb347', 2); fx('whistle'); st.sc = Math.max(st.sc, 14); h.vx = h.vy = 0; d.stun = 0.4; }
@@ -276,8 +278,9 @@
     const st = E.st, d = dHoop(e);
     if (d < 7.5) return startFinish(e);
     e.state = 'shoot'; e.stT = 0; e.userShot = !!isUser; e.released = false; e.vx *= 0.2; e.vy *= 0.2;
-    e.aiRel = 0.86 + U.gauss() * (0.16 - e.pl.r.sht * 0.009); // AI release timing
-    e.win = 0.035 + e.pl.r.sht * 0.0085 + (e.fire ? 0.05 : 0) - (d > 27 ? 0.02 : 0);
+    e.aiRel = 0.86 + U.gauss() * (0.16 - (d > 22.5 ? e.pl.r.thr : e.pl.r.sht) * 0.009); // AI release timing
+    e.sr = d > 22.5 ? e.pl.r.thr : e.pl.r.sht;   // 3PT rating beyond the arc
+    e.win = 0.035 + e.sr * 0.0085 + (e.fire ? 0.05 : 0) - (d > 27 ? 0.02 : 0);
     if (isUser && st.cfg.diff === 0) e.win += 0.03;
     if (isUser && st.cfg.film) e.win *= 1 + st.cfg.film * 0.06;   // Film Room upgrades
     fx('gather');
@@ -295,7 +298,8 @@
     const c = contest(e);
     let p = d < 10 ? 0.5 : d < 16 ? 0.44 : d < 22.5 ? 0.41 : 0.38;
     if (d > 25.5) p -= (d - 25.5) * 0.035;
-    p += (e.pl.r.sht - 5) * 0.035 + (e.fire ? 0.1 : 0);
+    p += ((e.sr || e.pl.r.sht) - 5) * 0.035 + (e.fire ? 0.1 : 0);
+    p *= (0.9 + 0.1 * (e.en == null ? 1 : e.en)) * (0.96 + (e.pl.morale == null ? 60 : e.pl.morale) / 1250);   // tired legs + morale
     p *= 0.4 + 0.6 * q;
     p *= 1 - c * 0.6;
     if (e.side === 0 && st.cfg.user === 'off') p *= [1.12, 1.04, 1, 0.94][st.cfg.diff];
@@ -467,12 +471,12 @@
     }
     let [sx, sy] = SPOTS[e.spot];
     // drive and kick: spread to the arc when the handler attacks
-    if (h && dHoop(h) < 13 && (e.spot === 4 || e.spot === 6) && e.pl.r.sht >= 5) { sx = e.x < 0 ? -21.5 : 21.5; sy = 4; }
+    if (h && dHoop(h) < 13 && (e.spot === 4 || e.spot === 6) && e.pl.r.thr >= 5) { sx = e.x < 0 ? -21.5 : 21.5; sy = 4; }
     e.tx = sx + Math.sin(st.t * 0.9 + e.i) * 0.8; e.ty = sy + Math.cos(st.t * 0.7 + e.i) * 0.6;
   }
   function freeSpot(e, pref) {
     const taken = offE().filter(o => o !== e).map(o => o.spot);
-    const opts = (pref || [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).filter(s => !taken.includes(s) && !(e.pl.r.sht < 4 && [1, 2, 3, 5].includes(s)));
+    const opts = (pref || [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).filter(s => !taken.includes(s) && !(e.pl.r.thr < 4 && [1, 2, 3, 5].includes(s)));
     return opts.length ? U.pick(opts) : e.spot;
   }
   function aiHandler(e, dt) {
@@ -490,14 +494,14 @@
     const r = e.pl.r;
     if (st.sc < 2.5) return startShot(e, false);
     if (d < 7 && !patience) return startShot(e, false);
-    if (!patience && ndd > 5 && d < 25.5 && r.sht >= 4 && Math.random() < 0.25 + r.sht * 0.05) return startShot(e, false);
+    if (!patience && ndd > 5 && d < 25.5 && (d > 22.5 ? r.thr : r.sht) >= 4 && Math.random() < 0.25 + (d > 22.5 ? r.thr : r.sht) * 0.05) return startShot(e, false);
     if (!patience && ndd > 3.5 && d < 17 && r.sht >= 5 && Math.random() < 0.2) return startShot(e, false);
-    if (nd && ndd < 3.2 && e.cd <= 0 && Math.random() < 0.05 + r.pas * 0.01) dribMove(e, U.pick(['cross', 'cross', 'spin', 'hesi', 'step', 'btb']), null);
+    if (nd && ndd < 3.2 && e.cd <= 0 && Math.random() < 0.04 + r.drb * 0.012) dribMove(e, U.pick(['cross', 'cross', 'spin', 'hesi', 'step', 'btb']), null);
     // pass to an open teammate
     if (Math.random() < 0.38) {
       let best = null, bs = 0;
-      offE().forEach(t => { if (t === e) return; const o = E.openness(t); const s = o * (0.5 + (is3(t.x, t.y) ? t.pl.r.sht / 9 : dHoop(t) < 9 ? 1 : t.pl.r.sht / 12)) + (t.cutting && o > 3 ? 4 : 0); if (s > bs) { bs = s; best = t; } });
-      const mine = ndd * (0.5 + r.sht / 12);
+      offE().forEach(t => { if (t === e) return; const o = E.openness(t); const s = o * (0.5 + (is3(t.x, t.y) ? t.pl.r.thr / 9 : dHoop(t) < 9 ? 1 : t.pl.r.sht / 12)) + (t.cutting && o > 3 ? 4 : 0); if (s > bs) { bs = s; best = t; } });
+      const mine = ndd * (0.5 + (is3(e.x, e.y) ? r.thr : r.sht) / 12);
       if (best && (bs > mine + 1.5 || st.t > 9) && lanesClear(e, best)) passTo(e, best);
     }
   }
@@ -519,8 +523,11 @@
       helpers.sort((a, c) => Math.hypot(a.x - b.h.x, a.y - b.h.y) - Math.hypot(c.x - b.h.x, c.y - b.h.y));
       if (helpers[0] === e) { tx = U.lerp(b.h.x, HX, 0.4); ty = U.lerp(b.h.y, HY, 0.4); }
     }
+    // transition: if your man is closer to the hoop than you, sprint back goal-side (no lag)
+    e.sprint = false;
+    if (m.y < e.y + 1 && ballY > 40) { tx = U.lerp(m.x, HX, 0.25); ty = Math.max(HY + 3, m.y - 4); e.sprint = true; }
     // reaction lag based on defense rating
-    const mul = st.aiMul.def, k = Math.min(1, dt * (2.2 + e.pl.r.def * 0.45) * mul);
+    const mul = st.aiMul.def, k = e.sprint ? 1 : Math.min(1, dt * (2.2 + e.pl.r.def * 0.45) * mul);
     e.rx = e.rx == null ? tx : U.lerp(e.rx, tx, k); e.ry = e.ry == null ? ty : U.lerp(e.ry, ty, k);
     e.tx = e.rx; e.ty = e.ry;
     // contest shots
@@ -568,7 +575,9 @@
     if (e.hesiT > 0) { e.hesiT -= dt; if (e.hesiT <= 0 && e.state === 'run') { let hx = HX - e.x, hy = HY - e.y; const hl = Math.hypot(hx, hy) || 1; e.vx = hx / hl * e.spd * 1.6; e.vy = hy / hl * e.spd * 1.6; e.burst = 0.32; } }
     if (mv) {
       const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
-      let spd = e.spd * (e.ball ? 0.9 : 1) * (e.fire ? 1.06 : 1);
+      let spd = e.spd * (e.ball ? 0.9 : 1) * (e.fire ? 1.06 : 1) * (0.88 + 0.12 * (e.en == null ? 1 : e.en));
+      if (e.sprint && e !== st.ud) spd *= 1.15;
+      if (st.jogT > 0 && e.side === 0 && !isHuman(e)) spd *= 0.55;
       if (e.side === 1 && e !== st.ud) spd *= st.aiMul.def;
       if (e.side === 0 && e !== st.uo) spd *= Math.min(1.05, st.aiMul.off);
       if (e.userMove) spd *= 0.55 + 0.45 * Math.min(1, e.userMove);

@@ -1,6 +1,6 @@
 // network-first so updates show right away, cache as offline fallback.
 // Pages and version.json skip the browser cache so a Home Screen app always sees the newest version.
-const CACHE = 'ck-2.5.0';
+const CACHE = 'ck-2.6.0';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {

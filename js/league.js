@@ -21,6 +21,7 @@
       st: L.blankStats(), car: L.blankStats(), seasons: 0, tm: -1
     };
     if (p.hair === 5 && p.skin >= 3) p.hc = 0;
+    p.xp = 0; p.lvl = 1;
     p.sal = L.salaryFor(p);
     return p;
   };
@@ -54,7 +55,7 @@
     return s * 0.78 + (b || s - 2) * 0.22;
   };
   L.teamStars = t => U.clamp(Math.round((1.5 + (L.teamOvr(t) - 5.3) * 2.7) * 2) / 2, 0.5, 5);
-  L.offRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.sht * 0.45 + p.r.ins * 0.3 + p.r.pas * 0.15 + p.r.ath * 0.1, 0) / 5 + (t.id === CK.S.me && CK.FO ? CK.FO.ocB() * 0.15 : 0); };
+  L.offRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.sht * 0.2 + p.r.thr * 0.25 + p.r.ins * 0.3 + p.r.pas * 0.1 + p.r.drb * 0.05 + p.r.ath * 0.1, 0) / 5 + (t.id === CK.S.me && CK.FO ? CK.FO.ocB() * 0.15 : 0); };
   L.defRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.def * 0.65 + p.r.ath * 0.25 + (p.ht - 78) * 0.08, 0) / 5 + (t.id === CK.S.me && CK.FO ? CK.FO.dcB() * 0.15 : 0); };
 
   // ---------- new league ----------
@@ -73,6 +74,7 @@
       const sp = n.indexOf(' ');
       const p = { id: U.uid(), fn: sp > 0 ? n.slice(0, sp) : '', ln: sp > 0 ? n.slice(sp + 1) : n, pos, age, ht, num, skin, hair, hc: hair === 5 ? 0 : (skin >= 3 ? 0 : U.irand(0, 3)),
         r: { sht, ins, pas, def, ath }, pot, sal, yrs, morale: U.irand(60, 85), inj: out ? U.irand(2, 8) : 0, st: L.blankStats(), car: L.blankStats(), seasons: 1, tm: -1, real: true };
+      CK.fillRatings(p);
       (byTeam[tm] = byTeam[tm] || []).push(p);
     });
     S.real = real;
@@ -142,7 +144,7 @@
     const { st, bench } = L.lineup(t);
     const ppl = st.concat(bench.slice(0, 5));
     const mins = ppl.map((p, i) => i < 5 ? U.irand(28, 37) : i < 8 ? U.irand(12, 22) : U.irand(0, 8));
-    const uw = ppl.map((p, i) => mins[i] * Math.pow(p.r.sht * 0.55 + p.r.ins * 0.5 + p.r.ath * 0.25 + 1, 1.6) * U.rand(0.65, 1.35));
+    const uw = ppl.map((p, i) => mins[i] * Math.pow(p.r.sht * 0.3 + p.r.thr * 0.25 + p.r.ins * 0.5 + p.r.ath * 0.25 + 1, 1.6) * U.rand(0.65, 1.35));
     const split = (tot, w) => { const s = w.reduce((a, b) => a + b, 0) || 1; let out = w.map(x => Math.floor(tot * x / s)); let left = tot - out.reduce((a, b) => a + b, 0); while (left-- > 0) out[U.irand(0, out.length - 1)]++; return out; };
     const P = split(pts, uw);
     const R = split(U.irand(38, 50), ppl.map((p, i) => mins[i] * (p.r.ins + p.r.def * 0.5 + (p.ht - 70) * 0.4)));
@@ -152,9 +154,9 @@
     ppl.forEach((p, i) => {
       const b = box[p.id] || (box[p.id] = L.blankStats());
       if (mins[i] > 0) b.gp = 1;
-      const tp = Math.round(P[i] * U.clamp(p.r.sht / 22, 0.05, 0.42) / 3);
+      const tp = Math.round(P[i] * U.clamp(p.r.thr / 22, 0.03, 0.45) / 3);
       b.pts += P[i]; b.reb += R[i]; b.ast += A[i]; b.stl += ST[i]; b.blk += B[i];
-      b.tpm += tp; b.tpa += Math.round(tp / U.rand(0.3, 0.42)) + (p.r.sht > 5 ? U.irand(0, 2) : 0);
+      b.tpm += tp; b.tpa += Math.round(tp / U.rand(0.3, 0.42)) + (p.r.thr > 5 ? U.irand(0, 2) : 0);
       const twos = Math.max(0, Math.round((P[i] - tp * 3) * 0.82 / 2));
       b.fgm += twos + tp; b.fga += Math.round(twos / U.rand(0.45, 0.58)) + Math.round(tp / U.rand(0.3, 0.42));
     });
@@ -193,6 +195,7 @@
       S.teams.forEach(L.injuries);
       S.teams.forEach(t => { if (t.id !== S.me) L.autoStarters(t); });
       S.round++;
+      if (CK.FO && S.round % Math.max(2, Math.round(S.len / 6)) === 0) CK.FO.growTick();
       if (!S.deadline && S.round >= Math.floor(S.len * 0.6)) { S.deadline = true; L.inbox('Trade deadline passed', 'Trades are closed until the offseason.'); }
       if (S.round >= S.len) L.startPlayoffs();
       else CK.EV && CK.EV.maybe();
@@ -239,7 +242,10 @@
   // kind: locker/media/office/inj/trade/good/bad (shown as a card right after your game), or empty for plain news
   L.inbox = (title, body, choices, kind, extra) => { const m = { id: U.uid(), title, body, choices: choices || null, read: false, season: CK.S.season, rnd: CK.S.round, kind: kind || null, x: extra || null, fresh: !!kind }; CK.S.inbox.unshift(m); CK.S.inbox = CK.S.inbox.slice(0, 40); return m; };
   L.save = () => U.save('ck_save_v1', CK.S);
-  L.load = () => { const s = U.load('ck_save_v1', null); if (s && s.v === 1) { CK.S = s; L.migrate(s); return true; } return false; };
+  L.load = () => { const s = U.load('ck_save_v1', null); if (s && s.v === 1) { CK.S = s; L.migrate(s); Object.values(s.players).forEach(CK.fillRatings);
+    // v2.6: real skin tones from player photos (once per save)
+    if (!s.skin2) { const m = {}; CK.REAL.players.forEach(a => m[a[0]] = a[14]); Object.values(s.players).forEach(p => { const k = (p.fn ? p.fn + ' ' : '') + p.ln; if (p.real && m[k] != null) { p.skin = m[k]; if (p.skin >= 3) p.hc = 0; } }); s.skin2 = true; }
+    return true; } return false; };
   // v1 saves had made-up team names: attach real names/logos and scale salaries to the new cap
   L.migrate = s => {
     if (s.mig2) return;

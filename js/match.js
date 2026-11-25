@@ -77,7 +77,55 @@
     g.mode = 'intro';
     const S = CK.S;
     const card = t => '<span class="vt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + logoImg(t) + '<b>' + t.ab + '</b><small>' + U.esc((t.name || t.city).toUpperCase()) + '</small><em>' + t.w + '-' + t.l + '</em></span>';
-    banner('<div class="vs">' + card(g.away) + '<i>AT</i>' + card(g.home) + '</div><div class="sub">' + (g.label || 'GAME ' + (S.round + 1)) + '</div>', 2200, () => next(), true);
+    banner('<div class="vs">' + card(g.away) + '<i>AT</i>' + card(g.home) + '</div><div class="sub">' + (g.label || 'GAME ' + (S.round + 1)) + '</div>', 2200, () => g.net ? next() : tipoff(), true);
+  }
+  // ---------- opening tip: the two bigs jump at center court, tap SHOOT / SPACE when the ball peaks ----------
+  // clutch: last minute of the 4th (or OT) in a 6-point game, or the clutch possessions in highlights mode
+  const isClutch = () => !!g && (g.full ? (g.q >= 4 && Math.abs(g.hs - g.as) <= 6 && (E.st ? Math.min(E.st.gc, g.sec) : g.sec) <= 60) : !!g.clutch);
+  function tipoff() {
+    const big = l => l.st.slice().sort((a, b) => (b.ht + b.r.ath * 0.8) - (a.ht + a.r.ath * 0.8))[0];
+    const H = big(g.lineH), A = big(g.lineA);
+    const mineH = g.meHome;
+    g.tip = { t: 0, H, A, lH: CK.SP.lookOf(H, M.jersey(g.home, true)), lA: CK.SP.lookOf(A, M.jersey(g.away, false)), hit: null, win: null, done: false };
+    g.mode = 'tip'; CK.IN.reset();
+    flash(M.touch ? 'TAP SHOOT WHEN THE BALL PEAKS' : 'PRESS SPACE WHEN THE BALL PEAKS');
+    CK.SFX.play('whistle');
+  }
+  function tipFrame(dt) {
+    const T = g.tip, E2 = E; T.t += dt;
+    if (T.hit == null && (CK.IN.Ap || CK.IN.tap) && T.t > 0.4) T.hit = T.t;
+    CK.IN.consume();
+    const PEAK = 1.25;
+    if (T.win == null && T.t >= PEAK + 0.12) {
+      // timing: inside 0.12s of the peak is a near lock, a bad press still has a chance
+      const myMan = g.meHome ? T.H : T.A, them = g.meHome ? T.A : T.H;
+      let p = 0.5 + ((myMan.ht + myMan.r.ath) - (them.ht + them.r.ath)) * 0.03;
+      if (T.hit != null) p += U.clamp(0.35 - Math.abs(T.hit - PEAK) * 1.6, -0.25, 0.35); else p -= 0.15;
+      const iWin = Math.random() < U.clamp(p, 0.1, 0.92);
+      T.win = iWin === g.meHome ? 'home' : 'away';
+      CK.SFX.play('catch');
+      flash((T.win === 'home' ? g.home : g.away).ab + ' WINS THE TIP');
+    }
+    // draw: court centered on half court
+    const W = E2.W, cx0 = E2.projW(0, 47, 0)[0] + E2.cam; E2.cam = cx0 - W / 2;
+    CK.RD.drawIdle(ctx);
+    const P = (x, y, z) => { const v = E2.projW(x, y, z); return [Math.round(v[0]), Math.round(v[1])]; };
+    const jz = t => { const k = (t - 0.95) / 0.6; return k > 0 && k < 1 ? Math.sin(k * Math.PI) * 4.2 : 0; };
+    const drawP = (look, x, y, z, flip) => { const [sx, sy] = P(x, y, z); const pose = z > 0.3 ? 'jump' : 'idle'; ctx.drawImage(CK.SP.get(look, pose, 0, flip), sx - CK.SP.FX, sy - CK.SP.FY); };
+    const zH = jz(T.t), zA = jz(T.t);
+    // home attacks right in the first half -> stands on the left of center
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; [[0, 49.6], [0, 44.4]].forEach(([x, y]) => { const [sx, sy] = P(x, y, 0); ctx.fillRect(sx - 6, sy - 1, 12, 3); });
+    drawP(T.lH, 0, 49.6, zH, false); drawP(T.lA, 0, 44.4, zA, true);
+    // ball
+    let bx = 0, by = 47, bz;
+    if (T.win == null) bz = 4 + Math.sin(Math.min(1, T.t / PEAK) * Math.PI / 2) * 12;
+    else { const k = Math.min(1, (T.t - PEAK - 0.12) / 0.6); bz = 16 - k * 13; by = 47 + (T.win === 'home' ? -1 : 1) * k * 10; }
+    const [bsx, bsy] = P(bx, by, bz);
+    ctx.fillStyle = '#140a03'; ctx.fillRect(bsx - 3, bsy - 2, 6, 4); ctx.fillRect(bsx - 2, bsy - 3, 4, 6); ctx.fillStyle = '#ef7d2a'; ctx.fillRect(bsx - 2, bsy - 2, 4, 4);
+    if (T.win != null && T.t > PEAK + 1.0 && !T.done) {
+      T.done = true; g.q1 = T.win; g.poss = T.win; g.mode = 'between';
+      setTimeout(next, 150);
+    }
   }
   function next() {
     if (!g) return;
@@ -92,6 +140,7 @@
     g.sec = 0; hud();
     if (g.q >= 4 && g.hs !== g.as) return final();
     if (g.q === 2) return halftime();
+    if (g.en) for (const id in g.en) g.en[id] = Math.min(1, g.en[id] + (g.q === 2 ? 0.45 : 0.22));   // breaks between quarters
     if (g.full) { g.q++; if (g.q > 4) g.ot++; buildQuarter(); hud(); return banner('<div class="big">' + qName() + '</div>' + (g.ot ? '<div class="sub">OVERTIME</div>' : ''), 1300, next); }
     g.q++; if (g.q > 4) g.ot++;
     buildQuarter();
@@ -130,11 +179,11 @@
     let pts = 0, txt = '', big = false;
     for (let tries = 0; tries < 3; tries++) {
       if (Math.random() < 0.13 - od * 0.004) { if (Math.random() < 0.5) { const st = wPick(dpl, (p, i) => mins(p, i) * (p.r.def + p.r.ath)); B(st.id).stl++; } return { pts, txt: txt || 'turnover', big: false }; }
-      const sh = wPick(ppl, (p, i) => mins(p, i) * Math.pow(p.r.sht * 0.6 + p.r.ins * 0.5 + p.r.ath * 0.2 + 1, 1.7));
+      const sh = wPick(ppl, (p, i) => mins(p, i) * Math.pow(p.r.sht * 0.3 + p.r.thr * 0.3 + p.r.ins * 0.5 + p.r.ath * 0.2 + 1, 1.7));
       const b = B(sh.id);
       if (Math.random() < 0.09) { const m = (Math.random() < 0.6 + sh.r.sht * 0.03 ? 1 : 0) + (Math.random() < 0.6 + sh.r.sht * 0.03 ? 1 : 0); b.pts += m; pts += m; return { pts, txt: L.short(sh) + ' ' + m + '/2 at the line' }; }
-      const three = Math.random() < 0.18 + sh.r.sht * 0.035;
-      const pm = three ? 0.25 + sh.r.sht * 0.017 + od * 0.006 + diffAdj : 0.41 + sh.r.ins * 0.018 + od * 0.008 + diffAdj;
+      const three = Math.random() < 0.1 + sh.r.thr * 0.04;
+      const pm = three ? 0.25 + sh.r.thr * 0.017 + od * 0.006 + diffAdj : 0.41 + sh.r.ins * 0.018 + od * 0.008 + diffAdj;
       b.fga++; if (three) b.tpa++;
       if (Math.random() < pm) {
         b.fgm++; if (three) b.tpm++; const v = three ? 3 : 2; b.pts += v; pts += v;
@@ -184,7 +233,7 @@
       off: Object.assign({ players: lo.st.slice(0, 5), home: offT === g.home }, M.jersey(offT, offT === g.home)),
       def: Object.assign({ players: ld.st.slice(0, 5), home: defT === g.home }, M.jersey(defT, defT === g.home)),
       user, diff: CK.S.diff, dir: dirFor(offT), both: !!(g.net && !g.netGone), film: g.exhib || g.net ? 0 : (CK.S.fac.film || 1) - 1, ocB: g.exhib || g.net ? 0 : CK.FO.ocB(), dcB: g.exhib || g.net ? 0 : CK.FO.dcB(),
-      onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
+      energy: g.en || (g.en = {}), onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
     }, extra));
     st.ents.forEach(e => { if (g.fire[e.id]) e.fire = true; });
     if (g.net) netEv({ k: 'poss' });
@@ -220,6 +269,9 @@
     if (k === 'cheer') g.hype = Math.max(g.hype, 0.7);
   }
   function liveEnd(r, step, offT) {
+    // stamina: everyone who played that trip gets a little more tired (STAMINA rating = slower drain)
+    g.en = g.en || {};
+    [g.lineH, g.lineA].forEach(l => l.st.slice(0, 5).forEach(p => { const v = g.en[p.id] == null ? 1 : g.en[p.id]; g.en[p.id] = Math.max(0.35, v - (g.full ? 0.016 : 0.035) * (1.45 - p.r.sta * 0.09)); }));
     // merge box
     for (const id in r.box) { const b = g.box[id] || (g.box[id] = L.blankStats()); for (const k in r.box[id]) if (k !== 'gp') b[k] += r.box[id][k]; }
     if (offT === g.home) g.hs += r.pts; else g.as += r.pts;
@@ -282,8 +334,7 @@
     S.cc += cc; S.ccLife = (S.ccLife || 0) + cc;
     S.fans = Math.round(U.clamp(S.fans + sr(((res.won ? 2 : -2) + Math.min(2, hlCount * 0.5)) * sc) + (g.po && res.won ? 3 : 0), 0, 100));
     if (res.won) S.totW++; else S.totL++;
-    const lk = S.fac.lock || 1;
-    L.roster(g.me).forEach(p => p.morale = U.clamp(p.morale + (res.won ? lk : (lk >= 3 ? 0 : -1)) + ((res.box[p.id] && res.box[p.id].pts >= 20) ? 2 : 0), 0, 100));
+    CK.FO.afterGame(g, res);
     S.lastRes = { home: g.home.id, away: g.away.id, hs: res.hs, as: res.as, won: res.won, cc, po: g.po, label: g.label, season: S.season };
     // stats table
     const mine = L.roster(g.me).map(p => ({ p, b: res.box[p.id] })).filter(x => x.b && x.b.gp).sort((a, b) => b.b.pts - a.b.pts);
@@ -333,6 +384,7 @@
     g.hype = Math.max(0, g.hype - dt * 0.5);
     if (g.guest) return guestFrame(dt);
     if (g.paused) return;
+    if (g.mode === 'tip' && g.tip) return tipFrame(dt);
     if (E.st && g.mode === 'live') {
       acc += dt;
       while (acc >= 1 / 60) {
@@ -348,7 +400,7 @@
       }
     }
     if (g.net && E.st) g.net.snap(snapshot());
-    if (E.st) CK.RD.draw(ctx, { hype: g.hype, keepCam: !!(g.full && g.lastRes) });
+    if (E.st) CK.RD.draw(ctx, { hype: g.hype, keepCam: !!(g.full && g.lastRes), clutch: isClutch() });
     else if (g.mode !== 'final') { CK.RD.drawIdle && CK.RD.drawIdle(ctx); }
   }
 
