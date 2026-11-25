@@ -34,11 +34,14 @@
     last = performance.now(); acc = 0;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   };
+  // the canvas stays 225 px tall; its width follows the screen shape so wide phones get more court, not black bars
   function fit() {
     const vw = innerWidth, vh = innerHeight;
+    const w = U.clamp(Math.round(E.H * vw / vh), 320, 540);
+    if (w !== E.W || canvas.width !== w) { E.W = w; canvas.width = w; canvas.height = E.H; CK.RD.setW(w); }
     const s = Math.min(vw / E.W, vh / E.H);
     const st = root.querySelector('#stage');
-    st.style.width = Math.floor(E.W * s) + 'px'; st.style.height = Math.floor(E.H * s) + 'px';
+    st.style.width = Math.ceil(E.W * s) + 'px'; st.style.height = Math.ceil(E.H * s) + 'px';
     root.style.setProperty('--u', s + 'px');
     root.classList.toggle('portrait', vh > vw && M.touch);
   }
@@ -351,7 +354,7 @@
   }
 
   // ---------- HUD / overlays ----------
-  const logoImg = t => (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : CK.UI.logoTag(CK.logoUrl(t.logo), 'mlg', 24);
+  const logoImg = t => (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : CK.UI.logoTag(CK.logoUrl(t.logo), 'mlg', 32);
   const clk = s => s >= 60 ? U.clock(s) : (Math.max(0, s)).toFixed(1);
   function hud() {
     const h = root.querySelector('#hud');

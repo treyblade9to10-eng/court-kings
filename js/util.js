@@ -39,6 +39,42 @@ window.CK = window.CK || {};
     }
   };
   U.pixW = (str, s = 1) => String(str).length * 4 * s - s;
+  // turn a big logo image into a clean pixel-art version: smooth shrink in halves (keeps detail),
+  // then hard alpha edges, a little extra color pop, and a 1px dark outline so it reads on any floor
+  U.pixLogo = (im, w, h, outline = '#0a0a14') => {
+    let src = im, sw = im.naturalWidth || im.width, sh = im.naturalHeight || im.height;
+    while (sw / 2 > w * 1.5 && sh / 2 > h * 1.5) {
+      const c = document.createElement('canvas'); c.width = Math.round(sw / 2); c.height = Math.round(sh / 2);
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.drawImage(src, 0, 0, c.width, c.height); src = c; sw = c.width; sh = c.height;
+    }
+    const W = w + 2, H = h + 2, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 1, 1, w, h);
+    let d;
+    try { d = g.getImageData(0, 0, W, H); } catch (e) { return c; }   // cross-origin: keep the smooth shrink
+    const D = d.data, solid = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      const k = i * 4, a = D[k + 3];
+      if (a < 110) { D[k + 3] = 0; continue; }
+      solid[i] = 1;
+      // un-premultiply edge pixels and add a bit of saturation/contrast
+      const m = (D[k] + D[k + 1] + D[k + 2]) / 3;
+      for (let j = 0; j < 3; j++) D[k + j] = Math.max(0, Math.min(255, (m + (D[k + j] - m) * 1.25 - 128) * 1.08 + 128));
+      D[k + 3] = 255;
+    }
+    if (outline) {
+      const [or, og, ob] = [1, 3, 5].map(i => parseInt(outline.slice(i, i + 2), 16));
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * W + x; if (solid[i]) continue;
+        if ((x > 0 && solid[i - 1]) || (x < W - 1 && solid[i + 1]) || (y > 0 && solid[i - W]) || (y < H - 1 && solid[i + W])) {
+          const k = i * 4; D[k] = or; D[k + 1] = og; D[k + 2] = ob; D[k + 3] = 255;
+        }
+      }
+    }
+    g.putImageData(d, 0, 0);
+    return c;
+  };
 
   // storage
   U.save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { console.warn('save failed', e); return false; } };

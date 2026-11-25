@@ -1,6 +1,6 @@
 // Court Kings - boot
 (function (CK) {
-  CK.VER = '2.2.0';
+  CK.VER = '2.3.0';
   addEventListener('DOMContentLoaded', () => {
     const game = document.getElementById('game');
     if (CK.M.touch) game.classList.add('touch');

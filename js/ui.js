@@ -13,19 +13,21 @@
   const pips = (v, col) => { let s = '<span class="pips">'; for (let i = 1; i <= 10; i++) s += '<i class="' + (i <= v ? 'on' : '') + '"' + (i <= v && col ? ' style="background:' + col + '"' : '') + '></i>'; return s + '</span>'; };
   const bar = (v, col) => '<span class="bar"><i style="width:' + v + '%;background:' + col + '"></i></span>';
   // logos are shrunk to a few pixels and blown back up, so they look like retro sprites
-  const LGPX = { tlg: 22, big: 26, hd: 26, sm: 14 };
+  const LGPX = { tlg: 34, big: 40, hd: 40, sm: 18 };
   UI.logoTag = (url, cls, n) => '<canvas class="lg pxl ' + (cls || '') + '" width="' + n + '" height="' + n + '" data-lg="' + url + '"></canvas>';
   UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : UI.logoTag(CK.logoUrl(t.logo), cls, LGPX[cls] || 24);
   const lgImgs = {};
   const paintLogo = c => {
     const url = c.dataset.lg; c.removeAttribute('data-lg');
     let im = lgImgs[url];
-    if (!im) { im = lgImgs[url] = new Image(); im.cbs = []; im.onload = () => { im.ok = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.onerror = () => { im.bad = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.src = url; }
+    if (!im) { im = lgImgs[url] = new Image(); im.cbs = []; im.crossOrigin = 'anonymous'; im.onload = () => { im.ok = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.onerror = () => { im.bad = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.src = url; }
     const go = () => {
       if (im.bad) return c.remove();
       const g = c.getContext('2d'), n = c.width;
-      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-      g.clearRect(0, 0, n, n); g.drawImage(im, 0, 0, n, n);
+      g.imageSmoothingEnabled = false;
+      im.px = im.px || {};
+      const P = im.px[n] || (im.px[n] = U.pixLogo(im, n - 2, n - 2));
+      g.clearRect(0, 0, n, n); g.drawImage(P, 0, 0);
     };
     im.ok || im.bad ? go() : im.cbs.push(go);
   };
