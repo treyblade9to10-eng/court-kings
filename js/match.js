@@ -274,10 +274,12 @@
     let cc = (res.won ? 3 : 1) + Math.min(3, Math.floor(hlCount / 2)) + (g.meHome ? Math.floor(S.fans / 40) + (S.fac.arena - 1) * 0.5 : 0);
     if (g.po && res.won) cc += 4;
     if (!res.played) cc = Math.max(1, Math.floor(cc * 0.6));
-    cc = Math.round(cc);
+    // long seasons pay less per game so 82 games is not 4x the credits of 20
+    const sc = g.po ? 1 : U.clamp(20 / (S.len || 20), 0.25, 1.5);
+    const sr = x => { const f = Math.floor(x); return f + (Math.random() < x - f ? 1 : 0); };
+    cc = Math.max(res.won ? 1 : 0, sr(cc * sc));
     S.cc += cc;
-    S.fans = U.clamp(S.fans + (res.won ? 2 : -2) + Math.min(2, hlCount * 0.5) + (g.po && res.won ? 3 : 0), 0, 100);
-    S.fans = Math.round(S.fans);
+    S.fans = Math.round(U.clamp(S.fans + sr(((res.won ? 2 : -2) + Math.min(2, hlCount * 0.5)) * sc) + (g.po && res.won ? 3 : 0), 0, 100));
     if (res.won) S.totW++; else S.totL++;
     L.roster(g.me).forEach(p => p.morale = U.clamp(p.morale + (res.won ? 1 : -1) + ((res.box[p.id] && res.box[p.id].pts >= 20) ? 2 : 0), 0, 100));
     S.lastRes = { home: g.home.id, away: g.away.id, hs: res.hs, as: res.as, won: res.won, cc, po: g.po, label: g.label, season: S.season };
@@ -349,7 +351,7 @@
   }
 
   // ---------- HUD / overlays ----------
-  const logoImg = t => { const l = CK.RD.logo(t); return l ? '<img src="' + l.src + '" alt="">' : (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : '<img src="' + CK.logoUrl(t.logo) + '" alt="" onerror="this.remove()">'; };
+  const logoImg = t => (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : CK.UI.logoTag(CK.logoUrl(t.logo), 'mlg', 24);
   const clk = s => s >= 60 ? U.clock(s) : (Math.max(0, s)).toFixed(1);
   function hud() {
     const h = root.querySelector('#hud');

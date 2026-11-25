@@ -26,7 +26,7 @@
       ch: [['Run it', { teamMorale: 5 }], ['Skip, scrimmage instead', { cc: 1 }]] }
   ];
   EV.maybe = () => {
-    const S = CK.S; if (!U.chance(0.32)) return;
+    const S = CK.S; if (!U.chance(0.32 * Math.min(1, 20 / (S.len || 20)))) return;
     const ro = L.roster(L.myTeam());
     for (let tries = 0; tries < 6; tries++) {
       const e = U.pick(T); let p = null;

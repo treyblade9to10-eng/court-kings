@@ -12,7 +12,26 @@
   UI.stars = n => { let s = '<span class="stars">'; for (let i = 1; i <= 5; i++) s += n >= i ? STAR : n >= i - 0.5 ? HALF : EMPTY; return s + '</span>'; };
   const pips = (v, col) => { let s = '<span class="pips">'; for (let i = 1; i <= 10; i++) s += '<i class="' + (i <= v ? 'on' : '') + '"' + (i <= v && col ? ' style="background:' + col + '"' : '') + '></i>'; return s + '</span>'; };
   const bar = (v, col) => '<span class="bar"><i style="width:' + v + '%;background:' + col + '"></i></span>';
-  UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : '<img class="lg ' + (cls || '') + '" src="' + CK.logoUrl(t.logo) + '" alt="" loading="lazy" onerror="this.remove()">';
+  // logos are shrunk to a few pixels and blown back up, so they look like retro sprites
+  const LGPX = { tlg: 22, big: 26, hd: 26, sm: 14 };
+  UI.logoTag = (url, cls, n) => '<canvas class="lg pxl ' + (cls || '') + '" width="' + n + '" height="' + n + '" data-lg="' + url + '"></canvas>';
+  UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : UI.logoTag(CK.logoUrl(t.logo), cls, LGPX[cls] || 24);
+  const lgImgs = {};
+  const paintLogo = c => {
+    const url = c.dataset.lg; c.removeAttribute('data-lg');
+    let im = lgImgs[url];
+    if (!im) { im = lgImgs[url] = new Image(); im.cbs = []; im.onload = () => { im.ok = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.onerror = () => { im.bad = true; im.cbs.forEach(f => f()); im.cbs = []; }; im.src = url; }
+    const go = () => {
+      if (im.bad) return c.remove();
+      const g = c.getContext('2d'), n = c.width;
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.clearRect(0, 0, n, n); g.drawImage(im, 0, 0, n, n);
+    };
+    im.ok || im.bad ? go() : im.cbs.push(go);
+  };
+  const scanLogos = root => (root.querySelectorAll ? root.querySelectorAll('canvas[data-lg]') : []).forEach(paintLogo);
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType !== 1) return; if (n.matches && n.matches('canvas[data-lg]')) paintLogo(n); else scanLogos(n); }))).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', () => scanLogos(document));
   const teamTag = t => '<span class="tt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'sm') + t.ab + '</span>';
   const bigTeam = t => '<div class="bigt" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + (UI.logo(t, 'big') || '<b class="ab">' + t.ab + '</b>') + '<span>' + U.esc(t.city.toUpperCase()) + '</span><b>' + U.esc((t.name || t.ab).toUpperCase()) + '</b></div>';
   const rec = t => t.w + '-' + t.l;
@@ -23,12 +42,24 @@
       const c = document.createElement('canvas'); c.width = 20; c.height = 20; const g = c.getContext('2d');
       const skin = CK.SKIN[p.skin], hair = CK.HAIR[p.hc], jer = t ? t.c1 : '#555', trim = t ? (U.lum(t.c2) > 0.3 ? t.c2 : '#fff') : '#ccc';
       g.fillStyle = jer; g.fillRect(3, 15, 14, 5); g.fillStyle = trim; g.fillRect(3, 15, 2, 5); g.fillRect(15, 15, 2, 5); g.fillRect(8, 15, 4, 1);
-      g.fillStyle = skin; g.fillRect(8, 13, 4, 2); g.fillRect(5, 4, 10, 10);
-      g.fillStyle = U.shade(skin, -0.18); g.fillRect(5, 12, 10, 2); g.fillRect(4, 8, 1, 3); g.fillRect(15, 8, 1, 3);
-      g.fillStyle = '#1a1010'; g.fillRect(7, 8, 2, 2); g.fillRect(11, 8, 2, 2); g.fillStyle = '#fff'; g.fillRect(7, 8, 1, 1); g.fillRect(11, 8, 1, 1);
-      g.fillStyle = U.shade(skin, -0.35); g.fillRect(8, 12, 4, 1);
-      g.fillStyle = hair;
-      switch (p.hair) { case 0: g.fillRect(5, 3, 10, 2); break; case 1: g.fillRect(3, 0, 14, 6); g.fillRect(3, 6, 2, 4); g.fillRect(15, 6, 2, 4); break; case 2: g.fillRect(5, 0, 10, 5); break; case 3: g.fillRect(5, 2, 10, 3); g.fillRect(5, 5, 2, 3); break; case 4: g.fillRect(5, 2, 10, 3); g.fillStyle = trim; g.fillRect(5, 5, 10, 1); break; }
+      const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+      const skD = U.shade(skin, -0.18), skL = U.shade(skin, 0.12);
+      R(8, 13, 4, 2, skD);
+      R(5, 5, 10, 8, skin); R(6, 4, 8, 1, skin); R(6, 13, 8, 1, skin);            // rounded head
+      R(6, 12, 8, 2, skD); R(4, 8, 1, 3, skD); R(15, 8, 1, 3, skD); R(12, 5, 2, 2, skL); // jaw, ears, light
+      R(6, 7, 3, 1, U.shade(hair, 0.05)); R(11, 7, 3, 1, U.shade(hair, 0.05));    // brows
+      R(7, 8, 2, 2, '#1a1010'); R(11, 8, 2, 2, '#1a1010'); R(7, 8, 1, 1, '#fff'); R(11, 8, 1, 1, '#fff');
+      R(9, 10, 2, 1, U.shade(skin, -0.25));                                       // nose
+      if ((p.num * 7 + p.hair) % 3 === 0 && p.hair !== 5) { R(6, 11, 8, 3, hair); R(5, 10, 1, 2, hair); R(14, 10, 1, 2, hair); }
+      R(8, 12, 4, 1, U.shade(skin, -0.4));                                        // mouth
+      switch (p.hair) {
+        case 0: R(6, 3, 8, 2, hair); R(5, 4, 1, 3, hair); R(14, 4, 1, 3, hair); break;
+        case 1: R(4, 0, 12, 2, hair); R(3, 2, 14, 4, hair); R(3, 6, 2, 4, hair); R(15, 6, 2, 4, hair); break;
+        case 2: R(5, 0, 10, 5, hair); R(5, 0, 10, 1, U.shade(hair, 0.25)); break;
+        case 3: R(5, 2, 10, 3, hair); R(4, 4, 2, 8, hair); R(14, 4, 2, 8, hair); break;
+        case 4: R(6, 2, 8, 2, hair); R(5, 4, 10, 2, trim); break;
+        default: R(7, 5, 2, 1, U.shade(skin, 0.3));
+      }
       U.pixText(g, String(p.num), 10 - Math.ceil(U.pixW(String(p.num)) / 2), 16, trim === '#fff' && U.lum(jer) > 0.7 ? '#333' : trim);
       pcache[key] = c.toDataURL();
     }
@@ -111,7 +142,7 @@
   }
   UI.howTo = () => UI.modal('<h2>HOW TO PLAY</h2><div class="how">' +
     '<p><b>You are the coach.</b> Pick a team, win games, earn Coach Credits (CC), and build a dynasty.</p>' +
-    '<p><b>Games:</b> FULL GAME mode is full court with a running clock: you play every possession, offense and defense, and the ball goes right back the other way. Pick 2, 3, 5 or 8 minute quarters. HIGHLIGHTS mode sims most of the game and you only play the big possessions.</p>' +
+    '<p><b>Games:</b> FULL GAME mode is full court with a running clock: you play every possession, offense and defense, and the ball goes right back the other way. Pick 2, 3, 5 or 8 minute quarters, and a 10, 15, 21, 40 or 82 game season. HIGHLIGHTS mode sims most of the game and you only play the big possessions.</p>' +
     '<p><b>Play Now</b> is a quick game with any two real teams. <b>Play Now Online</b> lets you play a friend: one hosts and gets a code, the other joins with it.</p>' +
     '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. MOVE is a crossover that can break ankles. Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
     '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters (time it with their shot). STEAL pokes at the ball, but you can foul.</p>' +
@@ -121,7 +152,7 @@
 
   // ---------- new career ----------
   UI.newCareer = () => {
-    let pick = null, len = 20;
+    let pick = null, len = 21;
     const o = { mode: 'full', qlen: 3, ppq: 3, diff: 1 };
     const tmp = { teams: CK.TEAMS };
     // preview league to show strengths
@@ -134,7 +165,7 @@
         '<div class="lbl">PICK YOUR TEAM</div><div class="tgrid">' +
         prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'tlg') + '<b>' + t.ab + '</b><span>' + U.esc(t.name || t.city) + '</span>' + UI.stars(strengths[i]) + '</button>').join('') + '</div>' +
         UI.gameOpts(o) +
-        '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [12, 20, 30].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + ' GAMES</button>').join('') + '</div>' +
+        '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [10, 15, 21, 40, 82].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + '<small> GAMES</small></button>').join('') + '</div>' +
         '<button class="btn" id="go" ' + (pick == null ? 'disabled' : '') + '>' + (pick == null ? 'PICK A TEAM' : 'COACH ' + prev.teams[pick].city.toUpperCase()) + '</button>' +
         '<button class="btn alt" id="back">BACK</button></div>';
       click('.tpick', el => { UI._cn = $('#cname').value; pick = +el.dataset.i; draw(); });
@@ -229,14 +260,27 @@
   }
 
   // ---------- roster ----------
+  // Retro Bowl style roster: one clean table, position badge, face, name, stars, age, contract
+  const POSC = { PG: '#3d8bff', SG: '#22c3c3', SF: '#3dc45a', PF: '#f0a020', C: '#e5484d' };
+  UI.posBadge = (pos, big) => '<span class="posb' + (big ? ' big' : '') + '" style="--pc:' + (POSC[pos] || '#888') + '">' + pos + '</span>';
+  let rsort = 'depth';
   function tabRoster() {
     const S = CK.S, me = L.myTeam();
-    const ro = L.roster(me).sort((a, b) => (me.start.includes(b.id) - me.start.includes(a.id)) || CK.POS.indexOf(a.pos) - CK.POS.indexOf(b.pos) || L.ovr(b) - L.ovr(a));
+    const by = { depth: (a, b) => (me.start.includes(b.id) - me.start.includes(a.id)) || CK.POS.indexOf(a.pos) - CK.POS.indexOf(b.pos) || L.ovr(b) - L.ovr(a),
+      ovr: (a, b) => L.ovr(b) - L.ovr(a), age: (a, b) => a.age - b.age, sal: (a, b) => b.sal - a.sal };
+    const ro = L.roster(me).sort(by[rsort]);
     const pay = L.payroll(me);
+    const row = p => { const st = me.start.includes(p.id), gp = Math.max(1, p.st.gp);
+      return '<div class="rbr' + (st ? ' on5' : '') + '" data-id="' + p.id + '">' + UI.posBadge(p.pos) + UI.portrait(p, me, 34) +
+        '<div class="rbn"><b>' + U.esc(L.short(p).toUpperCase()) + (p.inj ? ' <em class="inj">OUT ' + p.inj + '</em>' : '') + '</b><span>#' + p.num + (p.st.gp ? ' / ' + (p.st.pts / gp).toFixed(1) + ' PPG' : '') + (st ? ' / STARTER' : '') + '</span></div>' +
+        '<div class="rbs">' + UI.stars(L.stars(p)) + '</div><div class="rba">' + p.age + '</div><div class="rbc">' + U.money(p.sal) + '<small>' + Math.max(0, p.yrs) + ' YR</small></div></div>'; };
     $('#tab').innerHTML = '<div class="rhead"><span>' + me.roster.length + '/' + CK.ROSTER_MAX + ' PLAYERS</span><span class="' + (pay > CK.CAP ? 'bad' : '') + '">PAYROLL ' + U.money(pay) + ' / ' + U.money(CK.CAP) + '</span></div>' +
-      '<div class="lbl">STARTERS <small>tap a player to train, swap or release</small></div>' +
-      '<div class="rgrid">' + ro.slice(0, 5).map(p => prow(p, me)).join('') + '</div><div class="lbl">BENCH</div><div class="rgrid">' + ro.slice(5).map(p => prow(p, me)).join('') + '</div>';
-    click('.prow', el => UI.player(L.P(el.dataset.id)));
+      '<div class="seg rsort">' + [['depth', 'LINEUP'], ['ovr', 'RATING'], ['age', 'AGE'], ['sal', 'SALARY']].map(([k, n]) => '<button data-v="' + k + '" class="' + (rsort === k ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>' +
+      '<div class="rbt" style="--tc:' + me.c1 + '"><div class="rbh"><span>POS</span><span></span><span>PLAYER</span><span>RATING</span><span class="rba">AGE</span><span class="rbc">CONTRACT</span></div>' +
+      (rsort === 'depth' ? '<div class="rbg">STARTING FIVE</div>' + ro.slice(0, 5).map(row).join('') + '<div class="rbg">BENCH</div>' + ro.slice(5).map(row).join('') : ro.map(row).join('')) +
+      '</div><div class="hint">Tap a player to see his card, train him, start him or release him.</div>';
+    click('.rsort button', el => { rsort = el.dataset.v; tabRoster(); });
+    click('.rbr', el => UI.player(L.P(el.dataset.id)));
   }
   function prow(p, t, extra) {
     const st = p.st, gp = Math.max(1, st.gp);
@@ -247,8 +291,17 @@
   UI.player = (p, opts) => {
     const S = CK.S, me = L.myTeam(), mine = p.tm === S.me, t = p.tm >= 0 ? L.T(p.tm) : null;
     const gp = Math.max(1, p.st.gp);
-    const html = '<div class="pcard" style="--c:' + (t ? t.c1 : '#444') + '">' + UI.portrait(p, t, 72) +
-      '<div><h2>' + U.esc(L.name(p)) + '</h2><div class="sub">' + p.pos + ' / #' + p.num + ' / ' + Math.floor(p.ht / 12) + "'" + (p.ht % 12) + '" / AGE ' + p.age + (t ? ' / ' + t.ab : ' / FREE AGENT') + '</div>' + UI.stars(L.stars(p)) + '<span class="ovr">OVR ' + L.ovr(p).toFixed(1) + '</span></div></div>' +
+    const html = '<div class="pcard2" style="--c:' + (t ? t.c1 : '#444') + ';--c2:' + (t ? t.c2 : '#888') + '">' +
+      '<div class="pcf"><div class="pct">' + UI.posBadge(p.pos, true) + '<span class="pcn">#' + p.num + '</span>' + (t ? UI.logo(t, 'sm') : '') + '</div>' +
+      '<div class="pcp">' + UI.portrait(p, t, 96) + '</div>' +
+      '<div class="pcname"><small>' + U.esc((p.fn || '').toUpperCase()) + '</small><b>' + U.esc(p.ln.toUpperCase()) + '</b></div>' +
+      '<div class="pcs">' + UI.stars(L.stars(p)) + '</div></div>' +
+      '<div class="pci"><div class="pcrow"><span>TEAM</span><b>' + (t ? U.esc(t.city.toUpperCase()) : 'FREE AGENT') + '</b></div>' +
+      '<div class="pcrow"><span>POSITION</span><b>' + ({ PG: 'POINT GUARD', SG: 'SHOOTING GUARD', SF: 'SMALL FORWARD', PF: 'POWER FORWARD', C: 'CENTER' }[p.pos] || p.pos) + '</b></div>' +
+      '<div class="pcrow"><span>HEIGHT</span><b>' + Math.floor(p.ht / 12) + "'" + (p.ht % 12) + '"</b></div>' +
+      '<div class="pcrow"><span>AGE</span><b>' + p.age + '</b></div>' +
+      '<div class="pcrow"><span>OVERALL</span><b class="ovr">' + L.ovr(p).toFixed(1) + '</b></div>' +
+      '<div class="pcrow"><span>SEASON</span><b>' + (p.st.gp ? (p.st.pts / gp).toFixed(1) + ' PTS ' + (p.st.reb / gp).toFixed(1) + ' REB ' + (p.st.ast / gp).toFixed(1) + ' AST' : 'NO GAMES YET') + '</b></div></div></div>' +
       '<div class="rt">' + CK.RKEYS.map(k => '<div class="rr"><span>' + CK.RATING_NAMES[k] + '</span>' + pips(p.r[k]) + '<b>' + p.r[k] + '</b>' + (mine && !opts ? '<button class="tr" data-k="' + k + '" ' + (p.r[k] >= 10 ? 'disabled' : '') + '>+1 <small>' + O.trainCost(p, k) + ' CC</small></button>' : '') + '</div>').join('') + '</div>' +
       (mine && !opts ? '<div class="look">LOOK <button class="btn sm alt" id="lskin">SKIN TONE</button><button class="btn sm alt" id="lhair">HAIR</button><button class="btn sm alt" id="lhc">HAIR COLOR</button></div>' : '') +
       '<div class="mor">MORALE ' + bar(p.morale, p.morale < 40 ? '#ff4d4d' : p.morale < 65 ? '#ffd23f' : '#3dff6a') + '</div>' +
