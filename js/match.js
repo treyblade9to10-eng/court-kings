@@ -159,8 +159,9 @@
     const user = step.k;
     const offT = user === 'off' ? g.me : g.opp, defT = user === 'off' ? g.opp : g.me;
     const lo = offT === g.home ? g.lineH : g.lineA, ld = defT === g.home ? g.lineH : g.lineA;
-    const tips = !M.touch ? (user === 'off' ? 'WASD to move. Hold SPACE and let go at the top of the meter (green = perfect). K passes to the open man, 1-5 picks a teammate. L is a crossover. Drive in and shoot to dunk.' : 'You guard the ball. SPACE to contest a shot, L to go for the steal. Stay between your man and the rim.')
-      : user === 'off' ? 'Move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. MOVE breaks ankles. Green ring = open.' : 'You guard the ball. CONTEST to jump at shooters, STEAL to poke it. Stay between your man and the rim.';
+    g.posT = offT === g.home ? 'home' : 'away'; hudPos();
+    const tips = !M.touch ? (user === 'off' ? 'WASD to move. Hold SPACE and let go at the top of the meter (green = perfect). K passes to the open man, 1-5 picks a teammate. Moves: E cross, F spin, R hesi, Q step-back, C behind the back. Drive in and shoot to dunk.' : 'You guard the ball. SPACE to contest (it says BLOCK once the shot goes up), L or E to go for the steal. Stay between your man and the rim.')
+      : user === 'off' ? 'Move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. CROSS, SPIN, HESI and STEP BACK break ankles. Green ring = open.' : 'You guard the ball. CONTEST jumps at shooters, it turns into BLOCK when the shot goes up. STEAL pokes the ball. Stay between your man and the rim.';
     const clutch = step.clutch && Math.abs(g.hs - g.as) <= 8;
     let html = '<div class="big">' + (user === 'off' ? 'YOUR BALL' : 'DEFENSE') + '</div>';
     if (clutch) html = '<div class="clutch">CLUTCH TIME</div>' + html;
@@ -178,6 +179,7 @@
   const dirFor = t => ((t === g.home) === (g.q <= 2)) ? 1 : -1;
   function startPoss(offT, defT, user, step, extra) {
     const lo = offT === g.home ? g.lineH : g.lineA, ld = defT === g.home ? g.lineH : g.lineA;
+    g.posT = offT === g.home ? 'home' : 'away'; hudPos();
     const st = E.start(Object.assign({
       off: Object.assign({ players: lo.st.slice(0, 5), home: offT === g.home }, M.jersey(offT, offT === g.home)),
       def: Object.assign({ players: ld.st.slice(0, 5), home: defT === g.home }, M.jersey(defT, defT === g.home)),
@@ -209,8 +211,8 @@
     }
     go();
   }
-  const tipText = user => !M.touch ? (user === 'off' ? 'OFFENSE: WASD to move. Hold SPACE, let go at the top of the meter. K passes, 1-5 picks a teammate, L is a crossover.' : 'DEFENSE: you guard the ball. SPACE to contest, L to go for the steal.')
-    : user === 'off' ? 'OFFENSE: move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. MOVE breaks ankles.' : 'DEFENSE: you guard the ball. CONTEST jumps at shooters, STEAL pokes at the ball.';
+  const tipText = user => !M.touch ? (user === 'off' ? 'OFFENSE: WASD to move. Hold SPACE, let go at the top of the meter. K passes, 1-5 picks a teammate. E cross, F spin, R hesi, Q step-back.' : 'DEFENSE: you guard the ball. SPACE to contest / block, L or E to steal.')
+    : user === 'off' ? 'OFFENSE: move with the stick. Hold SHOOT, let go at the top of the meter. Tap a teammate or PASS. CROSS / SPIN / HESI / STEP BACK break ankles.' : 'DEFENSE: you guard the ball. CONTEST jumps at shooters (BLOCK once the shot is up), STEAL pokes at the ball.';
   function say(t) { if (g && g.net) netEv({ k: 'say', t }); const el = root.querySelector('#ticker'); el.textContent = t; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
   function onFx(k) {
     CK.SFX.play(k); if (g && g.net && NET_FX.has(k)) netEv({ k: 'fx', f: k });
@@ -335,9 +337,9 @@
       acc += dt;
       while (acc >= 1 / 60) {
         // screen stick -> court directions for whichever way this possession attacks
-        const d = E.st.dir || 1, tr = I => ({ jx: d * I.jy, jy: -d * I.jx, A: I.A, Ap: I.Ap, Ar: I.Ar, Bp: I.Bp, Cp: I.Cp, tap: I.tap, pass: I.pass });
+        const d = E.st.dir || 1, tr = I => ({ jx: d * I.jy, jy: -d * I.jx, A: I.A, Ap: I.Ap, Ar: I.Ar, Bp: I.Bp, Cp: I.Cp, mv: I.mv, tap: I.tap, pass: I.pass });
         const I2 = g.net && !g.netGone ? tr(g.net.input()) : null;
-        E.update(1 / 60, tr(CK.IN), I2); CK.IN.consume(); acc -= 1 / 60;
+        E.update(1 / 60, tr(CK.IN), I2); CK.IN.consume(); acc -= 1 / 60; blockLabel();
         if (!E.st || !g) break;
       }
       if (E.st) {
@@ -353,17 +355,30 @@
   // ---------- HUD / overlays ----------
   const logoImg = t => (CK.S && CK.S.logos === 'retro') || !t.logo ? '' : CK.UI.logoTag(CK.logoUrl(t.logo), 'mlg', 32);
   const clk = s => s >= 60 ? U.clock(s) : (Math.max(0, s)).toFixed(1);
+  // TV-style score bug: [AWAY logo | AB | score] [HOME logo | AB | score] [quarter + clock] [shot clock]
+  let lastSc = null;
   function hud() {
     const h = root.querySelector('#hud');
-    h.innerHTML = '<div class="tm" style="--c:' + g.away.c1 + '">' + logoImg(g.away) + '<i>' + g.away.ab + '</i><b>' + g.as + '</b></div>' +
-      '<div class="mid"><div id="gclk">' + qName() + ' ' + clk(g.sec) + '</div><div class="scw">SHOT <span id="sc">24</span></div></div>' +
-      '<div class="tm r" style="--c:' + g.home.c1 + '"><b>' + g.hs + '</b><i>' + g.home.ab + '</i>' + logoImg(g.home) + '</div>';
+    const tm = (t, sc, k) => '<div class="sbt ' + k + (g.posT === k ? ' pos' : '') + (lastSc && lastSc[k] !== sc ? ' pop' : '') + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '"><span class="sbl">' + (logoImg(t) || '<u>' + t.ab[0] + '</u>') + '</span><i>' + t.ab + '</i><b>' + sc + '</b></div>';
+    h.innerHTML = '<div class="sb">' + tm(g.away, g.as, 'away') + tm(g.home, g.hs, 'home') +
+      '<div class="sbc"><span id="gclk">' + qName() + ' ' + clk(g.sec) + '</span></div><div class="sbs"><small>SHOT</small><span id="sc">24</span></div></div>';
+    lastSc = { away: g.as, home: g.hs };
   }
+  function hudPos() { const h = root.querySelector('#hud'); if (!h) return; h.querySelectorAll('.sbt').forEach(el => el.classList.toggle('pos', el.classList.contains(g.posT))); }
   function setButtons(user) {
     const a = root.querySelector('#btnA'), b = root.querySelector('#btnB'), c = root.querySelector('#btnC');
-    a.textContent = user === 'off' ? 'SHOOT' : 'CONTEST';
+    a.textContent = user === 'off' ? 'SHOOT' : 'CONTEST'; a.classList.remove('blk');
     b.textContent = 'PASS'; b.style.visibility = user === 'off' ? 'visible' : 'hidden';
-    c.textContent = user === 'off' ? 'MOVE' : 'STEAL';
+    c.textContent = 'STEAL'; c.style.visibility = user === 'off' ? 'hidden' : 'visible';
+    root.querySelectorAll('.gb.mv').forEach(el => el.style.visibility = user === 'off' ? 'visible' : 'hidden');
+    root.classList.toggle('udef', user !== 'off');
+  }
+  // on defense the CONTEST button turns into BLOCK while a shot is going up
+  function blockLabel() {
+    const st = E.st; if (!st || st.cfg.user !== 'def' || st.cfg.both) return;
+    const b = st.ball, up = (b.s === 'hold' && b.h && b.h.side === 0 && (b.h.state === 'shoot' || b.h.state === 'fin')) || b.s === 'shot';
+    const a = root.querySelector('#btnA');
+    if (up !== a.classList.contains('blk')) { a.classList.toggle('blk', up); a.textContent = up ? 'BLOCK' : 'CONTEST'; }
   }
   let bTimer = 0;
   function banner(html, ms, then, skippable) {

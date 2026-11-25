@@ -1,9 +1,10 @@
 // Court Kings - touch joystick, buttons, keyboard, tap-to-pass
 (function (CK) {
-  const IN = CK.IN = { jx: 0, jy: 0, A: false, Ap: false, Ar: false, Bp: false, Cp: false, tap: null };
+  const IN = CK.IN = { jx: 0, jy: 0, A: false, Ap: false, Ar: false, Bp: false, Cp: false, mv: null, tap: null };
+  const MOVES = { KeyE: 'cross', KeyF: 'spin', KeyR: 'hesi', KeyQ: 'step', KeyC: 'btb' };
   const keys = new Set();
   let joy = { id: null, ox: 0, oy: 0 };
-  IN.consume = () => { IN.Ap = IN.Ar = IN.Bp = IN.Cp = false; IN.tap = null; IN.pass = null; };
+  IN.consume = () => { IN.Ap = IN.Ar = IN.Bp = IN.Cp = false; IN.mv = null; IN.tap = null; IN.pass = null; };
   IN.reset = () => { IN.jx = IN.jy = 0; IN.A = false; IN.consume(); keys.clear(); joy.id = null; const k = document.getElementById('joyKnob'); if (k) k.style.transform = ''; };
 
   function keyVec() {
@@ -24,6 +25,7 @@
     if (/^Digit[1-5]$/.test(e.code)) IN.pass = +e.code.slice(5) - 1;
     if (e.code === 'KeyZ') pressA();
     if (e.code === 'KeyL' || e.code === 'ShiftLeft') IN.Cp = true;
+    if (MOVES[e.code]) IN.mv = MOVES[e.code];
     if (e.code === 'Escape' || e.code === 'KeyP') CK.M && CK.M.pause();
   });
   addEventListener('keyup', e => { keys.delete(e.code); keyVec(); if (e.code === 'Space' || e.code === 'KeyJ' || e.code === 'KeyZ') relA(); });
@@ -67,6 +69,7 @@
     btn('#btnA', pressA, relA);
     btn('#btnB', () => IN.Bp = true);
     btn('#btnC', () => IN.Cp = true);
+    root.querySelectorAll('[data-mv]').forEach(el => btn('#' + el.id, () => IN.mv = el.dataset.mv));
     const tapAt = (cx, cy) => { const r = canvas.getBoundingClientRect(); IN.tap = { x: (cx - r.left) / r.width * CK.CT.W, y: (cy - r.top) / r.height * CK.CT.H }; };
     canvas.addEventListener('touchstart', e => { CK.SFX.init(); const t = e.changedTouches[0]; tapAt(t.clientX, t.clientY); }, { passive: true });
     canvas.addEventListener('mousedown', e => { CK.SFX.init(); tapAt(e.clientX, e.clientY); });

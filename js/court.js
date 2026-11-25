@@ -92,6 +92,8 @@
       let v = (6.5 - dd) / 6.5 * (inFront(d, e) ? 1 : 0.45) * (0.55 + d.pl.r.def * 0.05) * (1 + (d.ht - e.ht) * 0.015);
       if (d.z > 0.8) v *= 1.3;
       if (d.boost) v *= 1.25;
+      if (d.blockT > 0) v *= 1.15;
+      if (e.stepT > 0) v *= 0.7;
       c = Math.max(c, v);
     });
     return U.clamp(c, 0, 1);
@@ -154,7 +156,7 @@
         if (IN.tap) { const tm = tapTarget(IN.tap); if (tm && tm !== e) passTo(e, tm); }
         if (IN.pass != null) { const tm = offE()[IN.pass]; if (tm && tm !== e) passTo(e, tm); }
         if (IN.Bp) { const tm = bestPass(e, IN.jx, IN.jy); if (tm) passTo(e, tm); }
-        if (IN.Cp && e.cd <= 0) crossover(e, IN);
+        if ((IN.Cp || IN.mv) && e.cd <= 0) dribMove(e, IN.mv || 'cross', IN);
         if (IN.Ap) startShot(e, true);
       }
       if (e.state === 'shoot' && e.userShot && !e.released && (IN.Ar || !IN.A)) release(e);
@@ -165,8 +167,12 @@
       const e = st.ud; if (!e) return;
       if (mag > 0.15 && e.stun <= 0 && e.state === 'run') { e.tx = e.x + IN.jx / Math.max(1, mag) * 6; e.ty = e.y + IN.jy / Math.max(1, mag) * 6; e.userMove = mag; }
       else e.userMove = 0;
-      if (IN.Ap && e.state === 'run' && e.z <= 0) { e.state = 'jump'; e.vz = 12 + e.pl.r.ath * 0.25; e.stT = 0; e.userJump = true; fx('jump'); }
-      if (IN.Cp && e.cd <= 0 && e.state === 'run') stealTry(e, true);
+      if (IN.Ap && e.state === 'run' && e.z <= 0) {
+        // jumping while the shot is going up = a BLOCK attempt (a little more reach)
+        const b = st.ball, up = (b.s === 'hold' && b.h && b.h.side === 0 && (b.h.state === 'shoot' || b.h.state === 'fin')) || b.s === 'shot';
+        e.state = 'jump'; e.vz = 12 + e.pl.r.ath * 0.25 + (up ? 1 : 0); e.stT = 0; e.userJump = true; e.blockT = up ? 0.7 : 0; fx('jump');
+      }
+      if ((IN.Cp || IN.mv === 'cross') && e.cd <= 0 && e.state === 'run') stealTry(e, true);
     }
   }
   function tapTarget(t) {
@@ -186,6 +192,38 @@
   }
 
   // ---------- moves ----------
+  // dribble moves: cross (E), spin (F), hesi (R), step-back (Q), behind the back (C)
+  function dribMove(e, kind, IN) {
+    if (kind === 'cross') return crossover(e, IN);
+    const st = E.st; fx('dribble');
+    const [d, dd] = nearestDef(e);
+    let hx = HX - e.x, hy = HY - e.y; const hl = Math.hypot(hx, hy) || 1; hx /= hl; hy /= hl;
+    const sk = (e.pl.r.pas - (d ? d.pl.r.def : 5)) * 0.03 + (e.pl.r.ath - (d ? d.pl.r.ath : 5)) * 0.015 + (e.fire ? 0.1 : 0);
+    const close = d && dd < 4 && d.stun <= 0;
+    const ankles = mul => { if (close && Math.random() < U.clamp((0.06 + sk) * mul, 0.03, 0.5) / (e.side === 0 ? st.aiMul.def : 1)) { d.stun = 1.1; d.fell = true; pop('ANKLES!', 0, 34, '#ffd23f', 3); st.shake = 0.5; fx('ankles'); st.hl.push('ankles'); say(NM(e) + ' SENDS ' + NM(d) + ' TO THE FLOOR!'); return true; } return false; };
+    if (kind === 'spin') {
+      e.cd = 1.5; e.spinT = 0.42;
+      let px = d ? -(d.y - e.y) : -hy, py = d ? (d.x - e.x) : hx; const pl = Math.hypot(px, py) || 1; px /= pl; py /= pl;
+      if (px * hx + py * hy < 0) { px = -px; py = -py; }
+      const vx = hx * 0.6 + px * 0.8, vy = hy * 0.6 + py * 0.8, vl = Math.hypot(vx, vy) || 1;
+      e.vx = vx / vl * e.spd * 1.45; e.vy = vy / vl * e.spd * 1.45; e.burst = 0.42;
+      if (!ankles(d && inFront(d, e) ? 1.25 : 0.8) && close && Math.random() < 0.07 * (d.pl.r.def / 10)) stealBall(d, e);
+    } else if (kind === 'hesi') {
+      e.cd = 1.25; e.vx = e.vy = 0; e.burst = 0.26; e.hesiT = 0.26;
+      if (close && Math.random() < U.clamp(0.28 + sk, 0.1, 0.6)) { d.stun = Math.max(d.stun, 0.55); pop('HESI!', 0, 30, '#7cd6ff', 2); }
+    } else if (kind === 'step') {
+      e.cd = 1.4; e.stepT = 0.9;
+      let ax = d ? e.x - d.x : -hx, ay = d ? e.y - d.y : -hy; const al = Math.hypot(ax, ay) || 1;
+      e.vx = (ax / al * 0.6 - hx * 0.6) * e.spd * 1.3; e.vy = (ay / al * 0.6 - hy * 0.6) * e.spd * 1.3; e.burst = 0.3;
+      ankles(0.5);
+    } else if (kind === 'btb') {
+      e.cd = 1.0;
+      let dx = IN ? IN.jx : 0, dy = IN ? IN.jy : 0;
+      if (Math.hypot(dx, dy) < 0.3 && d) { dx = -(d.y - e.y); dy = (d.x - e.x); if (Math.random() < 0.5) { dx = -dx; dy = -dy; } }
+      const l = Math.hypot(dx, dy) || 1; e.vx = dx / l * e.spd * 1.35; e.vy = dy / l * e.spd * 1.35; e.burst = 0.3;
+      ankles(0.7);
+    }
+  }
   function crossover(e, IN) {
     const st = E.st; e.cd = 1.3; fx('dribble');
     const [d, dd] = nearestDef(e);
@@ -454,7 +492,7 @@
     if (d < 7 && !patience) return startShot(e, false);
     if (!patience && ndd > 5 && d < 25.5 && r.sht >= 4 && Math.random() < 0.25 + r.sht * 0.05) return startShot(e, false);
     if (!patience && ndd > 3.5 && d < 17 && r.sht >= 5 && Math.random() < 0.2) return startShot(e, false);
-    if (nd && ndd < 3.2 && e.cd <= 0 && Math.random() < 0.05 + r.pas * 0.01) crossover(e, null);
+    if (nd && ndd < 3.2 && e.cd <= 0 && Math.random() < 0.05 + r.pas * 0.01) dribMove(e, U.pick(['cross', 'cross', 'spin', 'hesi', 'step', 'btb']), null);
     // pass to an open teammate
     if (Math.random() < 0.38) {
       let best = null, bs = 0;
@@ -524,6 +562,10 @@
     // movement toward target
     let mv = e.state === 'run' && e.stun <= 0 && st.phase !== 'ft';
     if (e.burst > 0) e.burst -= dt;
+    if (e.spinT > 0) e.spinT -= dt;
+    if (e.stepT > 0) e.stepT -= dt;
+    if (e.blockT > 0) e.blockT -= dt;
+    if (e.hesiT > 0) { e.hesiT -= dt; if (e.hesiT <= 0 && e.state === 'run') { let hx = HX - e.x, hy = HY - e.y; const hl = Math.hypot(hx, hy) || 1; e.vx = hx / hl * e.spd * 1.6; e.vy = hy / hl * e.spd * 1.6; e.burst = 0.32; } }
     if (mv) {
       const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy);
       let spd = e.spd * (e.ball ? 0.9 : 1) * (e.fire ? 1.06 : 1);

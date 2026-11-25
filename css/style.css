@@ -682,3 +682,102 @@ img.hd, canvas.lg.hd { width: 54px; height: 54px; filter: drop-shadow(2px 2px 0 
 }
 .nxl { display: block; font-style: normal; font-family: 'P2'; font-size: 6px; color: var(--g); margin-bottom: 4px; }
 .tpc .posb, .nart .posb { color: #0b0d1a; font-size: 8px; } .ncr .seg button { line-height: 1.3; }
+
+/* ---- v2.5 see-through phone buttons that still say what they do ---- */
+.gb { background: rgba(0,0,0,0.18) !important; color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; border: 3px solid var(--gc); box-shadow: inset 0 0 0 2px rgba(0,0,0,.35), 0 0 0 2px rgba(0,0,0,.45); opacity: 1; line-height: 1.25; }
+.gb.dn { background: color-mix(in srgb, var(--gc) 55%, transparent) !important; transform: scale(0.92); filter: none; }
+.gb.a { --gc: #ff8a1f; width: 90px; height: 90px; right: 4px; bottom: 12px; font-size: 10px; }
+.gb.a.blk { --gc: #ff4d4d; animation: blkp 0.35s steps(2) infinite; }
+@keyframes blkp { 50% { background: rgba(255,77,77,.45) !important; } }
+.gb.b { --gc: #7cd6ff; width: 64px; height: 64px; right: 104px; bottom: 4px; }
+.gb.c { --gc: #3dff6a; width: 64px; height: 64px; right: 104px; bottom: 4px; }
+.gb.mv { --gc: #ffd23f; width: 52px; height: 52px; font-size: 7px; }
+.gb.m1 { right: 176px; bottom: 12px; }
+.gb.m2 { right: 158px; bottom: 76px; }
+.gb.m3 { right: 104px; bottom: 112px; }
+.gb.m4 { right: 40px; bottom: 112px; }
+#btns { width: 240px; height: 180px; }
+@media (max-height: 360px) { .gb.a { width: 78px; height: 78px; } .gb.mv { width: 46px; height: 46px; } .gb.m3, .gb.m4 { bottom: 100px; } }
+
+/* ---- v2.5 TV score bug ---- */
+#hud { top: calc(var(--u) * 3); gap: 0; }
+.sb { display: flex; align-items: stretch; background: #05060d; box-shadow: 0 0 0 calc(var(--u) * 0.8) #000, 0 calc(var(--u) * 1.5) 0 calc(var(--u) * 0.8) rgba(0,0,0,.45); }
+.sbt { display: flex; align-items: stretch; position: relative; border-bottom: calc(var(--u) * 1.4) solid var(--c2); }
+.sbt + .sbt { border-left: calc(var(--u) * 0.8) solid #000; }
+.sbl { display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--c) 70%, #000); padding: 0 calc(var(--u) * 1.6); }
+.sbl canvas, .sbl img { width: calc(var(--u) * 11) !important; height: calc(var(--u) * 11) !important; margin: 0 !important; }
+.sbl u { text-decoration: none; font-family: 'P2'; font-size: calc(var(--u) * 6); color: #fff; }
+.sbt i { font-style: normal; display: flex; align-items: center; background: var(--c); color: #fff; font-family: 'P2'; font-size: calc(var(--u) * 4.6); padding: 0 calc(var(--u) * 2.6); text-shadow: calc(var(--u) * 0.6) calc(var(--u) * 0.6) 0 #000; }
+.sbt b { display: flex; align-items: center; justify-content: center; min-width: calc(var(--u) * 19); background: #0d0f1c; font-family: 'P2'; font-size: calc(var(--u) * 7.5); color: #fff; padding: calc(var(--u) * 2.4) calc(var(--u) * 2) calc(var(--u) * 2); }
+.sbt.pos::after { content: ''; position: absolute; left: 50%; bottom: calc(var(--u) * -4.2); transform: translateX(-50%); border: calc(var(--u) * 2) solid transparent; border-top-color: #ffd23f; }
+.sbt.pop b { animation: sbpop 0.9s; }
+@keyframes sbpop { 0%, 40% { background: #ffd23f; color: #0b0d1a; } 100% { background: #0d0f1c; color: #fff; } }
+.sbc { display: flex; align-items: center; background: #11142a; border-left: calc(var(--u) * 0.8) solid #000; padding: 0 calc(var(--u) * 3); font-family: 'P2'; font-size: calc(var(--u) * 4.4); color: #ffd23f; white-space: nowrap; }
+.sbs { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; border-left: calc(var(--u) * 0.8) solid #000; padding: 0 calc(var(--u) * 2.4); min-width: calc(var(--u) * 15); }
+.sbs small { font-family: 'P2'; font-size: calc(var(--u) * 2.4); color: #8a90b8; opacity: 1; }
+.sbs #sc { font-family: 'P2'; font-size: calc(var(--u) * 5.2); color: #ff8a1f; margin-top: calc(var(--u) * 0.8); }
+.sbs #sc.low { color: #ff4d4d; animation: blink 0.4s steps(2) infinite; }
+
+/* ---- v2.5 Play Now matchup screen (Bobble Bowl style) ---- */
+.pn { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px max(10px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); background: radial-gradient(ellipse at 50% 120%, #1d2448, #090b18 70%); }
+.pnh { display: flex; align-items: center; gap: 12px; }
+.pnh .btn { margin: 0; } .pnh h2 { margin: 0; font-size: 14px; }
+.pnh span { margin-left: auto; font-family: 'P2'; font-size: 7px; color: var(--dim); }
+.pnm { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+.pnmid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.pnmid i { font-style: normal; font-family: 'P2'; font-size: 20px; color: var(--o); text-shadow: 3px 3px 0 #000; }
+.pnmid .btn { margin: 0; width: 86px; }
+.pnc { position: relative; min-height: 0; display: flex; flex-direction: column; background: linear-gradient(165deg, var(--c) 0%, color-mix(in srgb, var(--c) 55%, #0b0d1a) 55%, #0b0d1a 100%); box-shadow: 0 0 0 3px #000, 0 0 0 6px var(--c2), 6px 8px 0 4px rgba(0,0,0,.5); overflow: hidden; }
+.pnc.bump { animation: pnbump 0.25s; }
+@keyframes pnbump { 0% { transform: scale(0.97); } 100% { transform: scale(1); } }
+.pntag { position: absolute; top: 0; left: 0; font-family: 'P2'; font-size: 9px; padding: 6px 10px 5px; background: #000; color: #b9c0ff; z-index: 2; }
+.pntag.you { background: var(--y); color: #1b1300; }
+.pnar { position: absolute; right: 6px; z-index: 2; width: 46px; height: 38px; background: rgba(0,0,0,.55); border: 0; color: #fff; font-size: 16px; box-shadow: 0 0 0 2px #000; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.pnar em { font-style: normal; font-family: 'P2'; font-size: 7px; color: var(--y); }
+.pnar:active { background: var(--y); color: #000; }
+.pnar.up { top: 6px; } .pnar.dn { top: 50px; }
+.pnbody { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 56px 4px; cursor: pointer; touch-action: pan-y; text-align: center; }
+.pnlogo .lg.pnl { width: clamp(48px, 17vh, 120px); height: clamp(48px, 17vh, 120px); filter: drop-shadow(3px 4px 0 rgba(0,0,0,.6)); }
+.pnlogo .ab { font-family: 'P2'; font-size: 26px; color: #fff; text-shadow: 3px 3px 0 #000; }
+.pncity { font-family: 'P2'; font-size: 8px; color: #fff; opacity: .85; text-shadow: 1px 1px 0 #000; }
+.pnname { font-family: 'P2'; font-size: clamp(12px, 4vh, 22px); color: #fff; text-shadow: 3px 3px 0 #000; line-height: 1.2; }
+.pnbody > .stars .st { width: 14px; height: 14px; }
+.pnbars { width: 100%; max-width: 260px; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.pnb { display: flex; align-items: center; gap: 6px; font-family: 'P2'; font-size: 7px; color: #fff; }
+.pnb i { flex: 1; height: 8px; background: rgba(0,0,0,.6); box-shadow: 0 0 0 2px #000; }
+.pnb u { display: block; height: 100%; background: var(--y); }
+.pnb b { width: 20px; text-align: right; }
+.pnpl { width: 100%; max-width: 280px; margin-top: 4px; }
+.pnpl > div { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.45); padding: 4px 6px; margin-top: 3px; text-align: left; }
+.pp { font-family: 'P2'; font-size: 6px; color: var(--y); width: 18px; }
+.pn2 { flex: 1; font-family: 'P2'; font-size: 7px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pnpl .st { width: 8px; height: 8px; }
+.pnfoot { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,.6); padding: 4px 6px; }
+.pnall { background: var(--pan2); border: 0; font-family: 'P2'; font-size: 7px; padding: 6px 8px 5px; box-shadow: 0 0 0 2px #000; }
+.pnfoot span { font-family: 'P2'; font-size: 7px; color: var(--dim); }
+.pnf { display: flex; gap: 10px; align-items: stretch; }
+.pnset { flex: 1; display: flex; align-items: center; gap: 10px; background: var(--pan); border: 0; padding: 6px 10px; text-align: left; box-shadow: 0 0 0 3px #000, 0 0 0 5px var(--edge); font-family: 'P2'; font-size: 8px; color: var(--t); }
+.pnset .ico { font-size: 22px; color: var(--y); flex: none; }
+.pnset small { display: block; font-size: 6px; color: var(--dim); opacity: 1; margin-bottom: 4px; }
+.pnf .btn.big { width: auto; flex: 0 0 auto; margin: 0; padding: 10px 34px; }
+.pnf .btn.big small { font-family: 'P2'; font-size: 6px; margin-top: 4px; }
+.pnsets .lbl { margin: 10px 0 5px; }
+.pnsets .seg button { padding: 8px 4px 7px; }
+/* every-team picker */
+.pngrid { position: fixed; inset: 0; z-index: 60; background: rgba(5,6,13,.96); padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left)); display: flex; flex-direction: column; }
+.pgh { display: flex; align-items: center; justify-content: space-between; }
+.pgh b { font-family: 'P2'; font-size: 12px; color: var(--y); }
+.pgh .btn { margin: 0; }
+.pgc { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; overflow-y: auto; }
+.pgc .lbl { margin: 6px 0 4px; }
+.pgg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.pgt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px 4px; background: linear-gradient(var(--c), color-mix(in srgb, var(--c) 35%, #0b0d1a)); border: 0; border-bottom: 3px solid var(--c2); box-shadow: 0 0 0 2px #000; }
+.pgt .tlg { width: clamp(24px, 8vh, 44px); height: clamp(24px, 8vh, 44px); }
+.pgt b { font-family: 'P2'; font-size: 8px; color: #fff; text-shadow: 1px 1px 0 #000; }
+.pgt .st { width: 7px; height: 7px; }
+.pgt.cur { box-shadow: 0 0 0 2px #000, 0 0 0 5px var(--y); }
+.pgt.opp { opacity: 0.55; }
+.pgt em { position: absolute; top: 2px; left: 2px; right: 2px; font-style: normal; font-family: 'P2'; font-size: 5px; background: #000; color: var(--r); padding: 2px 0; }
+/* online pages with one card */
+.pnone { display: grid; grid-template-columns: minmax(240px, 1fr) 1fr; gap: 16px; margin-top: 8px; min-height: 300px; }
+@media (max-height: 420px) { .pnpl > div:nth-child(2) { display: none; } .pnbars { gap: 2px; } }

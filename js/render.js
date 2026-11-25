@@ -264,7 +264,7 @@
     else if (sp > 2) { pose = hasBall ? 'drib' : 'run'; f = Math.floor(e.run * 0.55) % 4; if (hasBall) pose = 'run'; }
     else if (hasBall) { pose = 'drib'; f = 1; }
     else if (e.side === 1 && st.phase === 'live') pose = 'def';
-    const fl = e.face * (st.dir || 1) < 0;
+    const fl = (e.face * (st.dir || 1) < 0) !== (e.spinT > 0 && ((e.spinT * 14) | 0) % 2 === 1);   // spin move: flip back and forth
     const img = CK.SP.get(e.look, pose, f, fl);
     const X = Math.round(sx) - CK.SP.FX, Y = Math.round(sy) - CK.SP.FY;
     ctx.drawImage(img, X, Y);

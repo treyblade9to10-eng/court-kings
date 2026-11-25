@@ -13,7 +13,7 @@
   const pips = (v, col) => { let s = '<span class="pips">'; for (let i = 1; i <= 10; i++) s += '<i class="' + (i <= v ? 'on' : '') + '"' + (i <= v && col ? ' style="background:' + col + '"' : '') + '></i>'; return s + '</span>'; };
   const bar = (v, col) => '<span class="bar"><i style="width:' + v + '%;background:' + col + '"></i></span>';
   // logos are shrunk to a few pixels and blown back up, so they look like retro sprites
-  const LGPX = { tlg: 34, big: 40, hd: 40, sm: 18, rdl: 30 };
+  const LGPX = { tlg: 34, big: 40, hd: 40, sm: 18, rdl: 30, pnl: 56 };
   UI.logoTag = (url, cls, n) => '<canvas class="lg pxl ' + (cls || '') + '" width="' + n + '" height="' + n + '" data-lg="' + url + '"></canvas>';
   UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : UI.logoTag(CK.logoUrl(t.logo), cls, LGPX[cls] || 24);
   const lgImgs = {};
@@ -146,10 +146,10 @@
     '<p><b>You are the coach.</b> Pick a team, win games, earn Coach Credits (CC), and build a dynasty.</p>' +
     '<p><b>Games:</b> FULL GAME mode is full court with a running clock: you play every possession, offense and defense, and the ball goes right back the other way. Pick 2, 3, 5 or 8 minute quarters, and a 10, 15, 21, 40 or 82 game season. HIGHLIGHTS mode sims most of the game and you only play the big possessions.</p>' +
     '<p><b>Play Now</b> is a quick game with any two real teams. <b>Play Now Online</b> lets you play a friend: one hosts and gets a code, the other joins with it.</p>' +
-    '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. MOVE is a crossover that can break ankles. Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
-    '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters (time it with their shot). STEAL pokes at the ball, but you can foul.</p>' +
+    '<p><b>Offense:</b> drag the left side to move. Hold SHOOT and let go when the meter hits the green. Tap a teammate (or PASS) to pass. Green ring = open, red = covered. CROSS, SPIN, HESI and STEP BACK are dribble moves that can break ankles (step-back makes space for a jumper). Drive close and press SHOOT to lay it up or dunk. Pass to a cutter near the rim for an alley-oop.</p>' +
+    '<p><b>Defense:</b> you guard whoever has the ball. CONTEST jumps at shooters. Once the shot goes up the button says BLOCK: hit it then for extra reach. STEAL pokes at the ball, but you can foul.</p>' +
     '<p><b>Hit 3 in a row</b> with the same player and he catches fire.</p>' +
-    '<p><b>Keyboard (computer):</b> WASD or arrows move, Space shoot/contest, K pass to the open man, 1-5 pass to a teammate, L crossover/steal, P pause.</p><p><b>Bigs set screens</b> on your defender. Use the pick, then hit the big rolling to the rim.</p><p><b>Phone:</b> play it sideways.</p>' +
+    '<p><b>Keyboard (computer):</b> WASD or arrows move, Space shoot / contest / block, K pass to the open man, 1-5 pass to a teammate, E cross, F spin, R hesi, Q step-back, C behind the back, L or E steal on defense, P pause.</p><p><b>Bigs set screens</b> on your defender. Use the pick, then hit the big rolling to the rim.</p><p><b>Phone:</b> play it sideways.</p>' +
     '<p><b>Front office:</b> spend CC to train players and upgrade facilities. Keep the fans and the owner happy or you get fired.</p></div>');
 
   // ---------- new career ----------

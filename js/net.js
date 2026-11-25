@@ -41,12 +41,13 @@
     H.event = ev => room.child('ev').push(JSON.stringify(ev));
     // turn the guest's counters into one-frame presses
     H.input = () => {
-      const r = H.remote || {}, l = H.last, o = { jx: r.jx || 0, jy: r.jy || 0, A: !!r.A, Ap: false, Ar: false, Bp: false, Cp: false, pass: null, tap: null };
+      const r = H.remote || {}, l = H.last, o = { jx: r.jx || 0, jy: r.jy || 0, A: !!r.A, Ap: false, Ar: false, Bp: false, Cp: false, mv: null, pass: null, tap: null };
+      if ((r.mn || 0) > (l.mn || 0)) o.mv = r.m;
       if ((r.a || 0) > (l.a || 0)) o.Ap = true; if ((r.ar || 0) > (l.ar || 0)) o.Ar = true;
       if ((r.b || 0) > (l.b || 0)) o.Bp = true; if ((r.c || 0) > (l.c || 0)) o.Cp = true;
       if ((r.pn || 0) > (l.pn || 0)) o.pass = r.p; if ((r.tn || 0) > (l.tn || 0)) o.tap = { x: r.tx, y: r.ty };
       if (performance.now() - H.lastIn > 1500) { o.jx = o.jy = 0; o.A = false; }
-      H.last = { a: r.a, ar: r.ar, b: r.b, c: r.c, pn: r.pn, tn: r.tn };
+      H.last = { a: r.a, ar: r.ar, b: r.b, c: r.c, pn: r.pn, tn: r.tn, mn: r.mn };
       return o;
     };
     H.close = () => { try { room.child('guest').off(); room.child('in').off(); room.remove(); room.onDisconnect().cancel(); } catch (e) { } };
@@ -75,7 +76,7 @@
     // called every frame with the local input (screen directions); sends only when something changed (or 4x a second)
     G.send = IN => {
       const c = G.cnt;
-      if (IN.Ap) c.a++; if (IN.Ar) c.ar++; if (IN.Bp) c.b++; if (IN.Cp) c.c++;
+      if (IN.Ap) c.a++; if (IN.Ar) c.ar++; if (IN.Bp) c.b++; if (IN.Cp) c.c++; if (IN.mv) { c.mn = (c.mn || 0) + 1; c.m = IN.mv; }
       if (IN.pass != null) { c.pn++; c.p = IN.pass; } if (IN.tap) { c.tn++; c.tx = Math.round(IN.tap.x); c.ty = Math.round(IN.tap.y); }
       const o = Object.assign({ jx: Math.round(IN.jx * 100) / 100, jy: Math.round(IN.jy * 100) / 100, A: IN.A ? 1 : 0 }, c);
       const str = JSON.stringify(o), now = performance.now();
