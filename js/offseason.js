@@ -39,7 +39,7 @@
 
   // job offers after being fired: 3 of the bottom teams
   O.jobOffers = () => CK.S.teams.filter(t => t.id !== CK.S.me).sort((a, b) => L.pct(a) - L.pct(b)).slice(0, 3).map(t => t.id);
-  O.takeJob = id => { const S = CK.S; S.me = id; S.owner = 55; S.fans = 45; S.fac = { train: 1, med: 1, arena: 1 }; S.cc = Math.max(S.cc, 8); L.inbox('New job', 'You take over ' + L.T(id).city + '. Fresh start, same goal.'); };
+  O.takeJob = id => { const S = CK.S; S.me = id; S.owner = 55; S.fans = 45; S.fac = { train: 1, med: 1, arena: 1, film: 1, lock: 1 }; S.cc = Math.max(S.cc, 8); L.inbox('New job', 'You take over ' + L.T(id).city + '. Fresh start, same goal.'); };
 
   // ---------- aging, progression, retirement ----------
   O.develop = () => {
@@ -86,7 +86,7 @@
     for (let i = 0; i < 64; i++) {
       const pos = U.pick(CK.POS), lvl = U.rand(2.6, 6.2) + (i < 6 ? 0.7 : 0);
       const p = L.newPlayer(pos, lvl, U.irand(19, 22)); p.tm = -3; p.pot = U.clamp(Math.round(U.rand(1, 5.5) + (lvl - 4) * 0.4), 1, 5);
-      p.scout = false; p.yrs = 0; p.seasons = 0; p.sal = 1;
+      p.scout = (S.fac.film || 1) >= 3; p.yrs = 0; p.seasons = 0; p.sal = 1;
       p.potLo = U.clamp(p.pot - U.irand(0, 2), 1, 5); p.potHi = U.clamp(p.pot + U.irand(0, 1), p.potLo, 5);
       S.players[p.id] = p; pros.push(p.id);
     }
@@ -151,7 +151,7 @@
   // ---------- new season ----------
   O.startNewSeason = () => {
     const S = CK.S;
-    S.season++; S.phase = 'season'; S.playoff = null; S.deadline = false; S.draft = null; S.review = null;
+    S.season++; CK.FO.ensure(S); S.phase = 'season'; S.playoff = null; S.deadline = false; S.draft = null; S.review = null;
     const me = L.myTeam();
     while (me.roster.length < CK.ROSTER_MIN) { const c = O.faList()[0]; O.sign(c, 1); }
     me.start = me.start.filter(id => me.roster.includes(id)); if (me.start.length < 5) L.autoStarters(me);
@@ -161,9 +161,9 @@
   };
 
   // ---------- training + facilities ----------
-  O.trainCost = (p, k) => 2 + Math.floor(p.r[k] / 2) + (p.age >= 30 ? 2 : 0);
+  O.trainCost = (p, k) => Math.max(1, 2 + Math.floor(p.r[k] / 2) + (p.age >= 30 ? 2 : 0) - (CK.S.fac.train >= 3 ? 1 : 0) - (CK.S.fac.train >= 5 ? 1 : 0));
   O.train = (p, k) => { const S = CK.S, c = O.trainCost(p, k); if (p.r[k] >= 10) return 'Already maxed.'; if (S.cc < c) return 'Need ' + c + ' Coach Credits.'; S.cc -= c; p.r[k]++; p.morale = Math.min(100, p.morale + 2); return null; };
-  O.facCost = k => 8 * CK.S.fac[k];
+  O.facCost = k => CK.FO.cost(k);
   O.upgrade = k => { const S = CK.S, c = O.facCost(k); if (S.fac[k] >= 5) return 'Already max level.'; if (S.cc < c) return 'Need ' + c + ' Coach Credits.'; S.cc -= c; S.fac[k]++; if (k === 'arena') S.fans = Math.min(100, S.fans + 6); return null; };
 
   // ---------- trades ----------

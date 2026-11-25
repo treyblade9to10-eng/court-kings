@@ -181,7 +181,7 @@
     const st = E.start(Object.assign({
       off: Object.assign({ players: lo.st.slice(0, 5), home: offT === g.home }, M.jersey(offT, offT === g.home)),
       def: Object.assign({ players: ld.st.slice(0, 5), home: defT === g.home }, M.jersey(defT, defT === g.home)),
-      user, diff: CK.S.diff, dir: dirFor(offT), both: !!(g.net && !g.netGone),
+      user, diff: CK.S.diff, dir: dirFor(offT), both: !!(g.net && !g.netGone), film: g.exhib || g.net ? 0 : (CK.S.fac.film || 1) - 1, ocB: g.exhib || g.net ? 0 : CK.FO.ocB(), dcB: g.exhib || g.net ? 0 : CK.FO.dcB(),
       onEnd: r => liveEnd(r, step, offT), onFx: onFx, onSay: say
     }, extra));
     st.ents.forEach(e => { if (g.fire[e.id]) e.fire = true; });
@@ -272,19 +272,16 @@
     const S = CK.S;
     if (g.exhib) return finishExhib(res);
     L.recordBox(res.box);
-    // rewards
+    // rewards (see front.js for every way to earn Coach Credits)
     const hlCount = res.hl.filter(h => ['dunk', 'oop', 'splash', 'block', 'ankles'].includes(h)).length;
-    let cc = (res.won ? 3 : 1) + Math.min(3, Math.floor(hlCount / 2)) + (g.meHome ? Math.floor(S.fans / 40) + (S.fac.arena - 1) * 0.5 : 0);
-    if (g.po && res.won) cc += 4;
-    if (!res.played) cc = Math.max(1, Math.floor(cc * 0.6));
-    // long seasons pay less per game so 82 games is not 4x the credits of 20
+    const earn = CK.FO.gameCC(g, res), cc = earn.total;
     const sc = g.po ? 1 : U.clamp(20 / (S.len || 20), 0.25, 1.5);
     const sr = x => { const f = Math.floor(x); return f + (Math.random() < x - f ? 1 : 0); };
-    cc = Math.max(res.won ? 1 : 0, sr(cc * sc));
-    S.cc += cc;
+    S.cc += cc; S.ccLife = (S.ccLife || 0) + cc;
     S.fans = Math.round(U.clamp(S.fans + sr(((res.won ? 2 : -2) + Math.min(2, hlCount * 0.5)) * sc) + (g.po && res.won ? 3 : 0), 0, 100));
     if (res.won) S.totW++; else S.totL++;
-    L.roster(g.me).forEach(p => p.morale = U.clamp(p.morale + (res.won ? 1 : -1) + ((res.box[p.id] && res.box[p.id].pts >= 20) ? 2 : 0), 0, 100));
+    const lk = S.fac.lock || 1;
+    L.roster(g.me).forEach(p => p.morale = U.clamp(p.morale + (res.won ? lk : (lk >= 3 ? 0 : -1)) + ((res.box[p.id] && res.box[p.id].pts >= 20) ? 2 : 0), 0, 100));
     S.lastRes = { home: g.home.id, away: g.away.id, hs: res.hs, as: res.as, won: res.won, cc, po: g.po, label: g.label, season: S.season };
     // stats table
     const mine = L.roster(g.me).map(p => ({ p, b: res.box[p.id] })).filter(x => x.b && x.b.gp).sort((a, b) => b.b.pts - a.b.pts);
@@ -297,7 +294,7 @@
     overlay('<h2 class="' + (res.won ? 'win' : 'loss') + '">' + (res.won ? 'WIN' : 'LOSS') + '</h2>' + scoreLine() +
       (best ? '<div class="pog">PLAYER OF THE GAME<b>' + U.esc(L.name(best.p)) + '</b>' + best.b.pts + ' PTS / ' + best.b.reb + ' REB / ' + best.b.ast + ' AST</div>' : '') +
       tbl + (hlSum ? '<div class="hls">' + hlSum + '</div>' : '') +
-      '<div class="earn">+' + cc + ' COACH CREDITS</div><button class="btn" id="fgo">CONTINUE</button>', () => {
+      '<div class="earnb">' + earn.lines.map(l => '<div><span>' + l[0] + '</span><b>' + (l[1] ? '+' + l[1] : '') + '</b></div>').join('') + '<div class="tot"><span>COACH CREDITS</span><b>+' + cc + '</b></div></div><button class="btn" id="fgo">CONTINUE</button>', () => {
         root.querySelector('#fgo').onclick = () => { closeOverlay(); M.exit(); g.done && g.done(res); };
       });
     CK.SFX.play(res.won ? 'cheer' : 'buzzer');

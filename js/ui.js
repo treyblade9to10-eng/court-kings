@@ -13,7 +13,7 @@
   const pips = (v, col) => { let s = '<span class="pips">'; for (let i = 1; i <= 10; i++) s += '<i class="' + (i <= v ? 'on' : '') + '"' + (i <= v && col ? ' style="background:' + col + '"' : '') + '></i>'; return s + '</span>'; };
   const bar = (v, col) => '<span class="bar"><i style="width:' + v + '%;background:' + col + '"></i></span>';
   // logos are shrunk to a few pixels and blown back up, so they look like retro sprites
-  const LGPX = { tlg: 34, big: 40, hd: 40, sm: 18 };
+  const LGPX = { tlg: 34, big: 40, hd: 40, sm: 18, rdl: 30 };
   UI.logoTag = (url, cls, n) => '<canvas class="lg pxl ' + (cls || '') + '" width="' + n + '" height="' + n + '" data-lg="' + url + '"></canvas>';
   UI.logo = (t, cls) => (!t.logo || (CK.S && CK.S.logos === 'retro')) ? '' : UI.logoTag(CK.logoUrl(t.logo), cls, LGPX[cls] || 24);
   const lgImgs = {};
@@ -74,7 +74,7 @@
 
   // ---------- shared game options (mode, quarter length, possessions, difficulty) ----------
   const QLENS = [2, 3, 5, 8];
-  UI.gameOpts = o => '<div class="lbl">GAME MODE</div><div class="seg" id="omode"><button data-v="full" class="' + (o.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (o.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS + SIMMED STRETCHES</button></div>' +
+  UI.gameOpts = o => '<div class="lbl">GAME MODE</div><div class="seg" id="omode"><button data-v="full" class="' + (o.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (o.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS</button></div>' +
     (o.mode !== 'highlights'
       ? '<div class="lbl">QUARTER LENGTH <small>game clock, you play every possession</small></div><div class="seg" id="oqlen">' + QLENS.map(n => '<button data-v="' + n + '" class="' + ((o.qlen || 3) === n ? 'sel' : '') + '">' + n + ' MIN</button>').join('') + '</div>'
       : '<div class="lbl">POSSESSIONS YOU PLAY PER QUARTER <small>the rest gets simmed</small></div><div class="seg" id="oppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + ((o.ppq || 3) === n ? 'sel' : '') + '">' + n + ' + ' + n + '</button>').join('') + '</div>') +
@@ -162,14 +162,14 @@
     const mk = () => { prev = L.newLeague({ team: 0 }); strengths = prev.teams.map(t => L.teamStars(t)); };
     mk();
     const draw = () => {
-      app().innerHTML = '<div class="page new"><h2>NEW CAREER</h2>' +
+      const sel = pick != null ? prev.teams[pick] : null;
+      app().innerHTML = '<div class="newc"><div class="ncl"><div class="nch2"><button class="btn alt sm" id="back">BACK</button><h2>PICK YOUR TEAM</h2></div><div class="tgrid">' +
+        prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + (UI.logo(t, 'tlg') || '<b class="ab">' + t.ab + '</b>') + '<b>' + t.ab + '</b>' + UI.stars(strengths[i]) + '</button>').join('') + '</div></div>' +
+        '<div class="ncr">' + (sel ? '<div class="selt" style="--c:' + sel.c1 + ';--c2:' + sel.c2 + '">' + (UI.logo(sel, 'big') || '') + '<div><small>' + U.esc(sel.city.toUpperCase()) + '</small><b>' + U.esc((sel.name || '').toUpperCase()) + '</b>' + UI.stars(strengths[pick]) + '</div></div>' : '<div class="selt none">TAP A TEAM</div>') +
         '<label class="fld">COACH NAME<input id="cname" maxlength="16" value="' + U.esc(UI._cn || 'Coach') + '"></label>' +
-        '<div class="lbl">PICK YOUR TEAM</div><div class="tgrid">' +
-        prev.teams.map((t, i) => '<button class="tpick ' + (pick === i ? 'sel' : '') + '" data-i="' + i + '" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + UI.logo(t, 'tlg') + '<b>' + t.ab + '</b><span>' + U.esc(t.name || t.city) + '</span>' + UI.stars(strengths[i]) + '</button>').join('') + '</div>' +
         UI.gameOpts(o) +
-        '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [10, 15, 21, 40, 82].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + '<small> GAMES</small></button>').join('') + '</div>' +
-        '<button class="btn" id="go" ' + (pick == null ? 'disabled' : '') + '>' + (pick == null ? 'PICK A TEAM' : 'COACH ' + prev.teams[pick].city.toUpperCase()) + '</button>' +
-        '<button class="btn alt" id="back">BACK</button></div>';
+        '<div class="lbl">SEASON LENGTH</div><div class="seg" id="len">' + [10, 15, 21, 40, 82].map(n => '<button data-v="' + n + '" class="' + (len === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>' +
+        '<button class="btn big" id="go" ' + (pick == null ? 'disabled' : '') + '>' + (pick == null ? 'PICK A TEAM' : 'COACH ' + U.esc(prev.teams[pick].ab)) + '</button></div></div>';
       click('.tpick', el => { UI._cn = $('#cname').value; pick = +el.dataset.i; draw(); });
       UI.bindOpts(o, () => { UI._cn = $('#cname').value; draw(); });
       click('#len button', el => { UI._cn = $('#cname').value; len = +el.dataset.v; draw(); });
@@ -186,7 +186,27 @@
     draw();
   };
 
-  // ---------- hub ----------
+  // ---------- pixel icons (rows of '#' drawn as crisp squares) ----------
+  const ICONS = {
+    home: ['....##....', '...####...', '..######..', '.########.', '##########', '.##....##.', '.##.##.##.', '.##.##.##.', '.##.##.##.', '.########.'],
+    roster: ['..##..##..', '.########.', '##########', '##.####.##', '...####...', '...#..#...', '...####...', '...####...', '...####...', '...####...'],
+    league: ['##########', '##########', '.########.', '.########.', '..######..', '...####...', '....##....', '....##....', '..######..', '.########.'],
+    trade: ['......#...', '......##..', '##########', '......##..', '......#...', '...#......', '..##......', '##########', '..##......', '...#......'],
+    office: ['..######..', '..#.##.#..', '..######..', '..#.##.#..', '..######..', '..#.##.#..', '##########', '#.##..##.#', '#.##..##.#', '##########'],
+    dumb: ['..........', '##......##', '##......##', '##########', '##########', '##......##', '##......##', '..........', '..........', '..........'],
+    cross: ['...####...', '...####...', '...####...', '##########', '##########', '##########', '...####...', '...####...', '...####...', '..........'],
+    arena: ['....##....', '..######..', '.########.', '##.#..#.##', '##########', '#.#.##.#.#', '##########', '##......##', '##......##', '##########'],
+    film: ['##########', '#.#.##.#.#', '##########', '##......##', '##......##', '##......##', '##########', '#.#.##.#.#', '##########', '..........'],
+    lock: ['##########', '#.##.##.##', '#.##.##.##', '##########', '##########', '#.##.##.##', '#.##.##.##', '#.##.##.##', '##########', '##########'],
+    whistle: ['..........', '.######...', '########..', '#####..###', '#####..###', '########..', '.######...', '..........', '..........', '..........'],
+    trophy: ['##########', '##########', '#.######.#', '#.######.#', '..######..', '...####...', '....##....', '....##....', '..######..', '.########.'],
+    gear: ['...#..#...', '.########.', '.###..###.', '###....###', '.##....##.', '.##....##.', '###....###', '.###..###.', '.########.', '...#..#...']
+  };
+  const icon = (k, col) => { const r = ICONS[k] || []; let d = ''; r.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '#') d += 'M' + x + ' ' + y + 'h1v1h-1z'; }); return '<svg class="ico" viewBox="0 0 10 10" shape-rendering="crispEdges"><path d="' + d + '" fill="' + (col || 'currentColor') + '"/></svg>'; };
+  UI.icon = icon;
+
+  // ---------- hub: side rail + top bar, sized to one landscape screen ----------
+  const TABS = [['home', 'HOME'], ['roster', 'ROSTER'], ['league', 'LEAGUE'], ['trade', 'TRADE'], ['office', 'OFFICE']];
   UI.hub = t => {
     tab = t || tab;
     const S = CK.S, me = L.myTeam();
@@ -195,46 +215,102 @@
     if (S.phase === 'draft') return UI.draft();
     if (S.phase === 'fa') return UI.fa();
     const unread = S.inbox.filter(m => !m.read).length;
+    const chip = (n, v, col) => '<div class="chip"><span>' + n + '</span><div class="cbar"><i style="width:' + v + '%;background:' + col + '"></i></div><b>' + v + '</b></div>';
     app().innerHTML = '<div class="hub" style="--tc:' + me.c1 + ';--tc2:' + me.c2 + '">' +
-      '<header><div class="tn">' + (UI.logo(me, 'hd') || teamTag(me)) + '<div><b>' + U.esc((me.city + ' ' + (me.name || '')).toUpperCase()) + '</b><span>' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '</span></div></div>' +
-      '<div class="cc"><i>CC</i><b>' + S.cc + '</b></div></header>' +
-      '<div class="meters"><div>FANS ' + bar(S.fans, '#3dff6a') + '</div><div>OWNER ' + bar(S.owner, S.owner < 25 ? '#ff4d4d' : '#ffd23f') + '</div></div>' +
-      '<main id="tab"></main>' +
-      '<nav>' + [['home', 'HOME'], ['roster', 'ROSTER'], ['league', 'LEAGUE'], ['trade', 'TRADE'], ['office', 'OFFICE']].map(([k, n]) => '<button data-t="' + k + '" class="' + (tab === k ? 'sel' : '') + '">' + n + (k === 'home' && unread ? '<em>' + unread + '</em>' : '') + '</button>').join('') + '</nav></div>';
+      '<nav><div class="rlogo">' + (UI.logo(me, 'big') || '<b>' + me.ab + '</b>') + '</div>' +
+      TABS.map(([k, n]) => '<button data-t="' + k + '" class="' + (tab === k ? 'sel' : '') + '">' + icon(k) + '<span>' + n + '</span>' + (k === 'home' && unread ? '<em>' + unread + '</em>' : '') + '</button>').join('') + '</nav>' +
+      '<header><div class="tn"><b>' + U.esc((me.city + ' ' + (me.name || '')).toUpperCase()) + '</b><span>' + rec(me) + ' / ' + U.ord(L.seed(me)) + ' IN THE ' + (me.conf === 'E' ? 'EAST' : 'WEST') + ' / ' + S.season + '-' + String(S.season + 1).slice(2) + '</span></div>' +
+      chip('FANS', S.fans, '#3dff6a') + chip('OWNER', S.owner, S.owner < 25 ? '#ff4d4d' : '#ffd23f') +
+      '<div class="cc" title="Coach Credits"><i>CC</i><b>' + S.cc + '</b></div></header>' +
+      '<main id="tab" class="t-' + tab + '"></main></div>';
     click('nav button', el => UI.hub(el.dataset.t));
     ({ home: tabHome, roster: tabRoster, league: tabLeague, trade: tabTrade, office: tabOffice })[tab]();
   };
 
+  // schedule road: every game is a stop with the opponent's logo, like a road trip map
+  function road() {
+    const S = CK.S, me = L.myTeam(), stops = [];
+    S.schedule.forEach((rd, i) => {
+      const m = rd.find(x => x[0] === S.me || x[1] === S.me); if (!m) return;
+      const home = m[0] === S.me, opp = L.T(home ? m[1] : m[0]), r = (S.results || {})[i];
+      stops.push({ opp, home, r, i, cur: S.phase === 'season' && i === S.round, past: S.phase !== 'season' || i < S.round, lbl: 'G' + (i + 1) });
+    });
+    if (S.phase === 'playoffs') S.playoff.rounds.forEach((rd, i) => {
+      const s = rd.find(x => x.a === S.me || x.b === S.me); if (!s) return;
+      const home = s.a === S.me, opp = L.T(home ? s.b : s.a);
+      stops.push({ opp, home, po: true, r: s.w != null ? { w: s.w === S.me, my: home ? s.hs : s.as, op: home ? s.as : s.hs } : null, cur: s.w == null, past: s.w != null, lbl: ['R1', 'SEMIS', 'CONF F', 'FINALS'][i] });
+    });
+    const goalN = stops.length;
+    return '<div class="road"><div class="rtrack" id="rtrack"><div class="asph"></div>' + stops.map(st => {
+      const res = st.r ? '<i class="' + (st.r.w ? 'w' : 'l') + '">' + (st.r.w ? 'W ' : 'L ') + st.r.my + '-' + st.r.op + '</i>' : st.cur ? '<i class="nx">NEXT</i>' : '<i class="g">' + st.lbl + '</i>';
+      return '<div class="stop' + (st.cur ? ' cur' : '') + (st.past ? ' past' : '') + (st.po ? ' po' : '') + '" style="--c:' + st.opp.c1 + ';--c2:' + st.opp.c2 + '">' + res +
+        '<div class="disc">' + (UI.logo(st.opp, 'rdl') || '<b>' + st.opp.ab + '</b>') + '</div><span>' + (st.home ? 'VS ' : '@ ') + st.opp.ab + '</span></div>';
+    }).join('') + '<div class="stop end"><i class="g">' + (S.phase === 'playoffs' ? 'TITLE' : 'PLAYOFFS') + '</i><div class="disc tro">' + icon('trophy', '#ffd23f') + '</div><span>' + (goalN ? '' : '') + '</span></div></div></div>';
+  }
   function tabHome() {
     const S = CK.S, me = L.myTeam(), g = L.myGame();
-    let h = '';
-    if (S.lastRes && S.lastRes.season === S.season) {
-      const r = S.lastRes, hT = L.T(r.home), aT = L.T(r.away);
-      h += '<div class="last ' + (r.won ? 'w' : 'l') + '">LAST GAME: ' + (r.won ? 'W' : 'L') + ' ' + aT.ab + ' ' + r.as + ' - ' + r.hs + ' ' + hT.ab + ' <span>+' + r.cc + ' CC</span></div>';
-    }
+    let card = '';
     if (g) {
       const opp = L.T(g.home === S.me ? g.away : g.home), isHome = g.home === S.me;
       const label = S.phase === 'playoffs' ? L.ROUND_NAMES[S.playoff.r] : 'GAME ' + (S.round + 1) + ' OF ' + S.len;
-      h += '<div class="next"><div class="lbl">' + label + (isHome ? ' / HOME' : ' / AWAY') + '</div>' +
-        '<div class="mu"><div class="side">' + bigTeam(me) + '<b>' + rec(me) + '</b>' + UI.stars(L.teamStars(me)) + '</div><i>VS</i><div class="side">' + bigTeam(opp) + '<b>' + rec(opp) + '</b>' + UI.stars(L.teamStars(opp)) + '</div></div>' +
-        '<button class="btn big" id="play">PLAY GAME</button><button class="btn alt" id="sim">SIM GAME<small>fewer Coach Credits</small></button></div>';
+      const side = (t, tag) => '<div class="side" style="--c:' + t.c1 + ';--c2:' + t.c2 + '">' + (UI.logo(t, 'big') || '<b class="ab">' + t.ab + '</b>') + '<div><small>' + tag + '</small><b>' + U.esc((t.name || t.city).toUpperCase()) + '</b><span>' + rec(t) + '</span>' + UI.stars(L.teamStars(t)) + '</div></div>';
+      card = '<div class="mcard"><div class="mlbl">' + label + '<span>' + (isHome ? 'HOME' : 'AWAY') + '</span></div><div class="mu2">' + side(me, 'YOU') + '<i>VS</i>' + side(opp, isHome ? 'VISITORS' : 'HOME') + '</div>' +
+        '<div class="mbtns"><button class="btn big" id="play">PLAY GAME</button><button class="btn alt" id="sim">SIM<small>fewer CC</small></button>' + (S.phase === 'playoffs' ? '<button class="btn alt" id="brk">' + icon('league') + '</button>' : '') + '</div></div>';
     } else if (S.phase === 'playoffs') {
-      h += '<div class="next"><div class="lbl">PLAYOFFS</div><p>Your season is over. ' + (S.playoff.r < 4 ? 'The bracket keeps going without you.' : '') + '</p><button class="btn big" id="simpo">SIM REST OF PLAYOFFS</button></div>';
+      card = '<div class="mcard"><div class="mlbl">PLAYOFFS<span>' + (L.myTeam() && S.playoff.champ == null ? 'OUT' : '') + '</span></div><p class="dim">Your season is over. The bracket keeps going without you.</p><div class="mbtns"><button class="btn big" id="simpo">SIM REST OF PLAYOFFS</button><button class="btn alt" id="brk">BRACKET</button></div></div>';
     }
-    if (S.phase === 'playoffs') h += bracket();
-    h = '<div class="cols"><div>' + h + '</div><div>';
-    h += '<div class="lbl">INBOX</div><div class="inbox">' + S.inbox.slice(0, 12).map(m => '<div class="msg ' + (m.read ? '' : 'new') + (m.choices ? ' ask' : '') + '" data-id="' + m.id + '"><b>' + U.esc(m.title) + '</b><span>' + U.esc(m.body).slice(0, 70) + (m.body.length > 70 ? '...' : '') + '</span></div>').join('') + '</div></div></div>';
-    $('#tab').innerHTML = h;
-    if (g) {
-      click('#play', () => startGame(g, false));
-      click('#sim', () => startGame(g, true));
+    const goal = CK.FO.goal(), gp = Math.min(100, Math.round(me.w / goal * 100));
+    let side = '<div class="goal"><span>OWNER GOAL</span><b>' + goal + '+ WINS</b><div class="cbar"><i style="width:' + gp + '%;background:' + (me.w >= goal ? '#3dff6a' : '#ffd23f') + '"></i></div><small>' + me.w + ' / ' + goal + (S.promise === S.season ? ' / YOU PROMISED THE PLAYOFFS' : '') + '</small></div>';
+    if (S.lastRes && S.lastRes.season === S.season) {
+      const r = S.lastRes, hT = L.T(r.home), aT = L.T(r.away);
+      side += '<div class="last ' + (r.won ? 'w' : 'l') + '"><b>' + (r.won ? 'W' : 'L') + '</b> ' + aT.ab + ' ' + r.as + ' - ' + r.hs + ' ' + hT.ab + ' <span>+' + r.cc + ' CC</span></div>';
     }
+    side += '<div class="lbl">NEWS</div><div class="inbox">' + (S.inbox.length ? S.inbox.slice(0, 12).map(m => '<div class="msg ' + (m.read ? '' : 'new') + (m.choices ? ' ask' : '') + '" data-id="' + m.id + '"><b>' + U.esc(m.title) + '</b></div>').join('') : '<p class="dim">Nothing yet.</p>') + '</div>';
+    $('#tab').innerHTML = road() + '<div class="hrow">' + card + '<div class="hside">' + side + '</div></div>';
+    const tr = $('#rtrack'), cur = tr && tr.querySelector('.stop.cur') || (tr && tr.querySelector('.stop.end'));
+    if (cur) tr.scrollLeft = cur.offsetLeft - tr.clientWidth / 2 + cur.offsetWidth / 2;
+    if (g) { click('#play', () => startGame(g, false)); click('#sim', () => startGame(g, true)); }
     click('#simpo', () => { L.simRestOfPlayoffs(); L.save(); UI.hub('home'); });
+    click('#brk', () => UI.bracket());
     click('.msg', el => openMsg(S.inbox.find(m => m.id === el.dataset.id)));
+    if (S.inbox.some(m => m.fresh)) setTimeout(UI.news, 250);
   }
+
+  // ---------- news cards: after-game dilemmas, good/bad news, injuries, trade offers ----------
+  const KIND = { locker: ['LOCKER ROOM', '#3d8bff'], media: ['MEDIA', '#b06bff'], office: ['FRONT OFFICE', '#ffd23f'], inj: ['INJURY REPORT', '#ff4d4d'], trade: ['TRADE OFFER', '#22c3c3'], good: ['GOOD NEWS', '#3dff6a'], bad: ['BAD NEWS', '#ff7a4d'] };
+  function cardHtml(m) {
+    const S = CK.S, k = KIND[m.kind] || ['NEWS', '#8a90b8'], me = L.myTeam();
+    const pid = m.choices && m.choices[0] && m.choices[0].pid;
+    const p = pid ? L.P(pid) : null;
+    let art = '';
+    if (m.kind === 'trade' && m.x) {
+      const give = L.P(m.x.give), get = L.P(m.x.get), t = L.T(m.x.tid);
+      const pc = (q, tm, tag) => q ? '<div class="tpc"><small>' + tag + '</small>' + UI.portrait(q, tm, 56) + '<b>' + U.esc(L.short(q).toUpperCase()) + '</b>' + UI.posBadge(q.pos) + UI.stars(L.stars(q)) + '<span>' + q.age + ' YRS / ' + U.money(q.sal) + '</span></div>' : '';
+      art = '<div class="tart">' + pc(give, me, 'YOU GIVE') + '<i>' + icon('trade') + '</i>' + pc(get, t, 'YOU GET') + '</div>';
+    } else if (p) art = '<div class="nart">' + UI.portrait(p, p.tm >= 0 ? L.T(p.tm) : null, 64) + '<div><b>' + U.esc(L.name(p).toUpperCase()) + '</b>' + UI.posBadge(p.pos) + UI.stars(L.stars(p)) + (p.inj ? '<em class="inj">OUT ' + p.inj + '</em>' : '') + '</div></div>';
+    return '<div class="ncard" style="--k:' + k[1] + '"><div class="nk">' + k[0] + '</div><h3>' + U.esc(m.title.toUpperCase()) + '</h3>' + art + '<p>' + U.esc(m.body) + '</p>' +
+      (m.choices ? '<div class="nch">' + m.choices.map((c, i) => '<button class="btn ' + (i ? 'alt' : '') + '" data-c="' + i + '">' + U.esc(c.label) + '</button>').join('') + '</div>' : '<div class="nres">' + U.esc(m.answered || '') + '</div><button class="btn" data-ok="1">OK</button>') + '</div>';
+  }
+  UI.news = () => {
+    const S = CK.S, list = S.inbox.filter(m => m.fresh).reverse();
+    const m = list[0]; if (!m) return;
+    m.fresh = false; m.read = !m.choices ? true : m.read; L.save();
+    UI.modal(cardHtml(m), mm => {
+      mm.querySelector('.card').classList.add('nc');
+      const nx = () => { UI.closeModal(); UI.hub(); };
+      mm.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { m.read = true; CK.EV.choose(m, +b.dataset.c); CK.SFX.play('click'); UI.toast(m.answered); nx(); });
+      const ok = mm.querySelector('[data-ok]'); if (ok) ok.onclick = nx;
+    });
+  };
   function openMsg(m) {
-    m.read = true; L.save();
-    UI.modal('<h2>' + U.esc(m.title) + '</h2><p class="mbody">' + U.esc(m.body) + '</p>' + (m.choices ? m.choices.map((c, i) => '<button class="btn alt" data-c="' + i + '">' + U.esc(c.label) + '</button>').join('') : m.answered ? '<p class="ans">You chose: ' + U.esc(m.answered) + '</p>' : ''), mm => {
+    m.read = true; m.fresh = false; L.save();
+    if (m.kind) {
+      UI.modal(cardHtml(m), mm => {
+        mm.querySelector('.card').classList.add('nc');
+        mm.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { CK.EV.choose(m, +b.dataset.c); UI.closeModal(); UI.toast(m.answered); UI.hub(); });
+        const ok = mm.querySelector('[data-ok]'); if (ok) ok.onclick = () => { UI.closeModal(); UI.hub(); };
+      });
+    } else UI.modal('<h2>' + U.esc(m.title) + '</h2><p class="mbody">' + U.esc(m.body) + '</p>' + (m.choices ? m.choices.map((c, i) => '<button class="btn alt" data-c="' + i + '">' + U.esc(c.label) + '</button>').join('') : m.answered ? '<p class="ans">You chose: ' + U.esc(m.answered) + '</p>' : ''), mm => {
       mm.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { CK.EV.choose(m, +b.dataset.c); UI.closeModal(); UI.toast(m.answered); UI.hub(); });
     });
     const em = document.querySelector('nav em'); if (em) { const n = CK.S.inbox.filter(x => !x.read).length; n ? em.textContent = n : em.remove(); }
@@ -242,24 +318,41 @@
   function startGame(gm, sim) {
     const S = CK.S;
     const label = S.phase === 'playoffs' ? L.ROUND_NAMES[S.playoff.r] : 'GAME ' + (S.round + 1);
+    const rnd = S.round, inSeason = S.phase === 'season';
     const done = res => {
+      if (inSeason) { S.results = S.results || {}; S.results[rnd] = { w: res.won, my: gm.home === S.me ? res.hs : res.as, op: gm.home === S.me ? res.as : res.hs }; }
       L.finishRound(res); L.save();
       UI.hub('home');
-      if (S.phase === 'review') return;
-      const unanswered = S.inbox.find(m => m.choices && !m.read);
-      if (unanswered) setTimeout(() => openMsg(unanswered), 300);
     };
     const opts = { home: gm.home, away: gm.away, po: !!gm.po, label };
     if (sim) CK.M.simGame(opts, done); else { app().innerHTML = ''; CK.M.start(opts, done); }
   }
-  function bracket() {
-    const S = CK.S, pl = S.playoff;
-    return '<div class="lbl">BRACKET</div><div class="brk">' + pl.rounds.map((r, i) => '<div class="rd"><div class="rn">' + L.ROUND_NAMES[i] + '</div>' + r.map(s => {
-      const a = L.T(s.a), b = L.T(s.b);
-      const row = (t, sc) => '<div class="' + (s.w === t.id ? 'w' : s.w != null ? 'l' : '') + (t.id === S.me ? ' me' : '') + '">' + teamTag(t) + (sc != null ? '<b>' + sc + '</b>' : '') + '</div>';
-      return '<div class="sr">' + row(a, s.hs) + row(b, s.as) + '</div>';
-    }).join('') + '</div>').join('') + '</div>';
-  }
+
+  // ---------- playoff bracket: East on the left, West on the right, Finals in the middle ----------
+  UI.bracket = () => {
+    const S = CK.S, pl = S.playoff; if (!pl) return;
+    const R = pl.rounds, at = (r, i) => (R[r] || [])[i];
+    const seedOf = id => { const t = L.T(id); return L.standings(t.conf).indexOf(t) + 1; };
+    const box = s => {
+      if (!s) return '<div class="bx tbd"><div><span>TBD</span></div><div><span>TBD</span></div></div>';
+      const row = (id, sc) => { const t = L.T(id); return '<div class="' + (s.w === id ? 'w' : s.w != null ? 'l' : '') + (id === S.me ? ' me' : '') + '" style="--c:' + t.c1 + '"><i>' + seedOf(id) + '</i>' + (UI.logo(t, 'sm') || '') + '<span>' + t.ab + '</span>' + (sc != null ? '<b>' + sc + '</b>' : '') + '</div>'; };
+      return '<div class="bx">' + row(s.a, s.hs) + row(s.b, s.as) + '</div>';
+    };
+    const pair = (x, y, side) => '<div class="pair ' + side + '">' + box(x) + box(y) + '</div>';
+    const col = (cls, inner, name) => '<div class="bc ' + cls + '"><div class="bn">' + name + '</div><div class="bcin">' + inner + '</div></div>';
+    const champ = pl.champ != null ? L.T(pl.champ) : null;
+    app().innerHTML = '<div class="bpage"><div class="bhead"><button class="btn alt sm" id="bback">BACK</button><h2>' + S.season + ' PLAYOFFS</h2><span>EVERY ROUND IS ONE GAME</span></div><div class="brk2">' +
+      col('e', pair(at(0, 0), at(0, 1), 'l') + pair(at(0, 2), at(0, 3), 'l'), 'FIRST ROUND') +
+      col('e', pair(at(1, 0), at(1, 1), 'l'), 'SEMIS') +
+      col('e', '<div class="one l">' + box(at(2, 0)) + '</div>', 'EAST FINAL') +
+      '<div class="bc fin"><div class="bn">THE FINALS</div><div class="bcin"><div class="trophy">' + icon('trophy', '#ffd23f') + '</div><div class="one">' + box(at(3, 0)) + '</div>' +
+      (champ ? '<div class="chmp" style="--c:' + champ.c1 + '">' + (UI.logo(champ, 'big') || '') + '<b>' + champ.ab + '</b><span>CHAMPIONS</span></div>' : '') + '</div></div>' +
+      col('w', '<div class="one r">' + box(at(2, 1)) + '</div>', 'WEST FINAL') +
+      col('w', pair(at(1, 2), at(1, 3), 'r'), 'SEMIS') +
+      col('w', pair(at(0, 4), at(0, 5), 'r') + pair(at(0, 6), at(0, 7), 'r'), 'FIRST ROUND') +
+      '</div><div class="blab"><span>EAST</span><span>WEST</span></div></div>';
+    click('#bback', () => UI.hub('home'));
+  };
 
   // ---------- roster ----------
   // Retro Bowl style roster: one clean table, position badge, face, name, stars, age, contract
@@ -335,12 +428,15 @@
   let lgView = 'stand';
   function tabLeague() {
     const S = CK.S;
-    let h = '<div class="seg" id="lv">' + [['stand', 'STANDINGS'], ['lead', 'LEADERS'], ['hist', 'HISTORY']].map(([k, n]) => '<button data-v="' + k + '" class="' + (lgView === k ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>';
+    let h = '<div class="seg" id="lv">' + [['stand', 'STANDINGS'], ['lead', 'LEADERS'], ['hist', 'HISTORY']].concat(S.playoff ? [['brk', 'BRACKET']] : []).map(([k, n]) => '<button data-v="' + k + '" class="' + (lgView === k ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>';
+    if (lgView === 'brk') { lgView = 'stand'; return UI.bracket(); }
     if (lgView === 'stand') {
+      h += '<div class="lcols">';
       ['E', 'W'].forEach(c => {
         h += '<div class="lbl">' + (c === 'E' ? 'EAST' : 'WEST') + '</div><table class="stand"><tr><th>#</th><th>TEAM</th><th>W-L</th><th>DIFF</th><th>STRK</th></tr>' +
           L.standings(c).map((t, i) => '<tr class="' + (t.id === S.me ? 'me' : '') + (i === 7 ? ' cut' : '') + '" data-t="' + t.id + '"><td>' + (i + 1) + '</td><td>' + teamTag(t) + ' ' + U.esc(t.city) + '</td><td>' + rec(t) + '</td><td>' + (t.pf - t.pa > 0 ? '+' : '') + (t.pf - t.pa) + '</td><td>' + (t.strk > 0 ? 'W' + t.strk : t.strk < 0 ? 'L' + -t.strk : '-') + '</td></tr>').join('') + '</table>';
       });
+      h = h.replace(/<div class="lbl">(EAST|WEST)<\/div>/g, '<div class="lc"><div class="lbl">$1</div>').replace(/<\/table>/g, '</table></div>') + '</div>';
     } else if (lgView === 'lead') {
       const all = Object.values(S.players).filter(p => p.tm >= 0 && p.st.gp >= 1);
       const cats = [['pts', 'POINTS'], ['reb', 'REBOUNDS'], ['ast', 'ASSISTS'], ['stl', 'STEALS'], ['blk', 'BLOCKS']];
@@ -365,48 +461,71 @@
     });
   }
 
-  // ---------- trade ----------
+  // ---------- trade: pick a team on the left, tap players to swap, meter shows if they say yes ----------
   let tr = { tid: null, give: [], get: [] };
   function tabTrade() {
     const S = CK.S, me = L.myTeam();
-    if (S.phase !== 'season' || S.deadline) { $('#tab').innerHTML = '<div class="next"><div class="lbl">TRADES CLOSED</div><p>' + (S.deadline ? 'The trade deadline has passed. Trades open again next season.' : 'No trades during the playoffs.') + '</p></div>'; return; }
+    if (S.phase !== 'season' || S.deadline) { $('#tab').innerHTML = '<div class="closed">' + icon('trade') + '<b>TRADES CLOSED</b><p>' + (S.deadline ? 'The trade deadline has passed. Trades open again next season.' : 'No trades during the playoffs.') + '</p></div>'; return; }
     if (tr.tid == null || tr.tid === S.me) tr.tid = (S.me + 1) % 30;
     const them = L.T(tr.tid);
     tr.give = tr.give.filter(id => me.roster.includes(id)); tr.get = tr.get.filter(id => them.roster.includes(id));
     const give = tr.give.map(L.P), get = tr.get.map(L.P);
     const ev = O.evalTrade(give, get, them.id);
     const col = ev.pct >= 100 ? '#3dff6a' : ev.pct >= 70 ? '#ffd23f' : '#ff4d4d';
-    $('#tab').innerHTML = '<div class="lbl">TRADE WITH</div><select id="tsel">' + S.teams.filter(t => t.id !== S.me).map(t => '<option value="' + t.id + '" ' + (t.id === them.id ? 'selected' : '') + '>' + t.city + ' (' + rec(t) + ')</option>').join('') + '</select>' +
-      '<div class="tmeter"><div>WILL THEY ACCEPT?</div>' + bar(ev.pct, col) + '<b style="color:' + col + '">' + ev.pct + '%</b></div>' +
-      (ev.err && (give.length || get.length) ? '<div class="terr">' + ev.err + '</div>' : '') +
-      '<button class="btn" id="prop" ' + (ev.ok ? '' : 'disabled') + '>PROPOSE TRADE</button>' +
-      '<div class="tcols"><div><div class="lbl">YOU GET</div>' + L.roster(them).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => tpRow(p, them, tr.get.includes(p.id), 'get')).join('') + '</div>' +
-      '<div><div class="lbl">YOU GIVE</div>' + L.roster(me).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => tpRow(p, me, tr.give.includes(p.id), 'give')).join('') + '</div></div>';
-    $('#tsel').onchange = e => { tr = { tid: +e.target.value, give: tr.give, get: [] }; tabTrade(); };
-    click('.tp', el => { const arr = tr[el.dataset.s]; const i = arr.indexOf(el.dataset.id); if (i >= 0) arr.splice(i, 1); else if (arr.length < 3) arr.push(el.dataset.id); tabTrade(); });
+    const dl = Math.max(0, Math.floor(S.len * 0.6) - S.round);
+    const row = (p, t, sel, side) => '<div class="tp2 ' + (sel ? 'sel' : '') + (p.inj ? ' hurt' : '') + '" data-id="' + p.id + '" data-s="' + side + '">' + UI.posBadge(p.pos) + UI.portrait(p, t, 26) + '<div class="tpn"><b>' + U.esc(L.short(p).toUpperCase()) + '</b><span>' + p.age + ' YRS / ' + U.money(p.sal) + ' x' + Math.max(0, p.yrs) + (p.inj ? ' / OUT ' + p.inj : '') + '</span></div>' + UI.stars(L.stars(p)) + '</div>';
+    $('#tab').innerHTML = '<div class="trade2">' +
+      '<div class="tteams">' + S.teams.filter(t => t.id !== S.me).map(t => '<button class="tt2 ' + (t.id === them.id ? 'sel' : '') + '" data-t="' + t.id + '" style="--c:' + t.c1 + '">' + (UI.logo(t, 'sm') || '') + '<b>' + t.ab + '</b><small>' + rec(t) + '</small></button>').join('') + '</div>' +
+      '<div class="tcol"><div class="th" style="--c:' + them.c1 + '">' + (UI.logo(them, 'sm') || '') + 'YOU GET <small>' + U.esc((them.name || them.city).toUpperCase()) + '</small></div><div class="tl">' + L.roster(them).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => row(p, them, tr.get.includes(p.id), 'get')).join('') + '</div></div>' +
+      '<div class="tcol"><div class="th" style="--c:' + me.c1 + '">' + (UI.logo(me, 'sm') || '') + 'YOU GIVE <small>' + U.esc((me.name || me.city).toUpperCase()) + '</small></div><div class="tl">' + L.roster(me).sort((a, b) => L.ovr(b) - L.ovr(a)).map(p => row(p, me, tr.give.includes(p.id), 'give')).join('') + '</div></div>' +
+      '<div class="tdeal"><div class="tm2"><span>WILL THEY ACCEPT?</span><div class="cbar big"><i style="width:' + ev.pct + '%;background:' + col + '"></i></div><b style="color:' + col + '">' + ev.pct + '%</b></div>' +
+      '<div class="terr">' + (ev.err && (give.length || get.length) ? ev.err : give.length || get.length ? (ev.ok ? 'They like it.' : 'Add more value or take less.') : 'Tap players on both sides. Up to 3 each.') + '</div>' +
+      '<button class="btn" id="prop" ' + (ev.ok ? '' : 'disabled') + '>PROPOSE</button><small class="dl">' + (dl ? 'DEADLINE IN ' + dl + ' GAME' + (dl > 1 ? 'S' : '') : 'LAST GAME BEFORE THE DEADLINE') + '</small></div></div>';
+    const sel = $('.tt2.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' });
+    click('.tt2', el => { tr = { tid: +el.dataset.t, give: tr.give, get: [] }; tabTrade(); });
+    click('.tp2', el => { const arr = tr[el.dataset.s]; const i = arr.indexOf(el.dataset.id); if (i >= 0) arr.splice(i, 1); else if (arr.length < 3) arr.push(el.dataset.id); tabTrade(); });
     click('#prop', () => {
       if (!ev.ok) return;
       O.doTrade(give, get, them.id); tr.give = []; tr.get = []; L.save(); CK.SFX.play('cheer'); UI.toast('Trade done!'); UI.hub('roster');
     });
   }
-  const tpRow = (p, t, sel, side) => '<div class="tp ' + (sel ? 'sel' : '') + '" data-id="' + p.id + '" data-s="' + side + '"><span class="pos">' + p.pos + '</span><b>' + U.esc(L.short(p)) + '</b>' + UI.stars(L.stars(p)) + '<small>' + p.age + 'y ' + U.money(p.sal) + '</small></div>';
 
-  // ---------- office ----------
+  // ---------- front office: facilities, staff, how to earn CC, settings ----------
+  let foView = 'fac';
   function tabOffice() {
-    const S = CK.S;
-    const FAC = { train: ['TRAINING CENTER', 'Players improve more each offseason.'], med: ['MEDICAL', 'Fewer games lost to injuries.'], arena: ['ARENA', 'More fans, more CC from home games.'] };
-    $('#tab').innerHTML = '<div class="lbl">FACILITIES</div>' + Object.keys(FAC).map(k => '<div class="fac"><div><b>' + FAC[k][0] + '</b><span>' + FAC[k][1] + '</span><div class="lv">' + [1, 2, 3, 4, 5].map(i => '<i class="' + (i <= S.fac[k] ? 'on' : '') + '"></i>').join('') + '</div></div>' +
-      (S.fac[k] >= 5 ? '<span class="max">MAX</span>' : '<button class="btn sm" data-k="' + k + '">UPGRADE<small>' + O.facCost(k) + ' CC</small></button>') + '</div>').join('') +
-      '<div class="lbl">SETTINGS</div>' +
-      '<div class="setrow">DIFFICULTY<div class="seg" id="sdif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (S.diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
-      '<div class="setrow">GAME MODE<div class="seg" id="smode"><button data-v="full" class="' + (S.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (S.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS + SIMS</button></div></div>' +
-      (S.mode !== 'highlights' ? '<div class="setrow">QUARTER LENGTH<div class="seg" id="sqlen">' + QLENS.map(n => '<button data-v="' + n + '" class="' + ((S.qlen || 3) === n ? 'sel' : '') + '">' + n + ' MIN</button>').join('') + '</div></div>'
-        : '<div class="setrow">POSSESSIONS PER QUARTER<div class="seg" id="sppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (S.ppq === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>') +
-      '<div class="setrow">TEAM LOGOS<div class="seg" id="slg"><button data-v="real" class="' + (S.logos !== 'retro' ? 'sel' : '') + '">REAL</button><button data-v="retro" class="' + (S.logos === 'retro' ? 'sel' : '') + '">RETRO LETTERS</button></div></div>' +
-      '<div class="setrow">SOUND<div class="seg" id="ssnd"><button data-v="1" class="' + (CK.SFX.on ? 'sel' : '') + '">ON</button><button data-v="0" class="' + (!CK.SFX.on ? 'sel' : '') + '">OFF</button></div></div>' +
-      '<button class="btn alt sm" id="howb">HOW TO PLAY</button><button class="btn alt sm" id="quit">TITLE SCREEN</button>' +
-      '<p class="dim">Coach ' + U.esc(S.coach) + ' / career ' + S.totW + '-' + S.totL + ' / saves automatically on this device</p>';
-    click('.fac .btn', el => { const err = O.upgrade(el.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.hub('office'); UI.toast('Upgraded!'); });
+    const S = CK.S, FO = CK.FO;
+    let h = '<div class="seg fov">' + [['fac', 'FACILITIES'], ['staff', 'COACHING STAFF'], ['earn', 'EARN CC'], ['set', 'SETTINGS']].map(([k, n]) => '<button data-v="' + k + '" class="' + (foView === k ? 'sel' : '') + '">' + n + '</button>').join('') + '</div>';
+    if (foView === 'fac') {
+      h += '<div class="facs">' + FO.KEYS.map(k => {
+        const f = FO.FAC[k], lv = S.fac[k], c = FO.cost(k);
+        return '<div class="fac2' + (lv >= 5 ? ' max' : '') + '">' + '<div class="fi">' + icon(f.icon, lv >= 5 ? '#ffd23f' : '#e9ecff') + '</div><b>' + f.name + '</b><div class="lv">' + [1, 2, 3, 4, 5].map(i => '<i class="' + (i <= lv ? 'on' : '') + '"></i>').join('') + '</div>' +
+          '<p>' + (lv >= 5 ? f.fx(lv) : '<em class="nxl">NEXT LEVEL</em>' + f.fx(lv + 1)) + '</p>' + (lv >= 5 ? '<span class="mx">MAXED</span>' : '<button class="btn sm ' + (S.cc < c ? 'no' : '') + '" data-k="' + k + '">UPGRADE<small>' + c + ' CC</small></button>') + '</div>';
+      }).join('') + '</div>';
+    } else if (foView === 'staff') {
+      const role = (r, name, what) => {
+        const cur = S.staff[r];
+        return '<div class="staff"><div class="scur">' + icon('whistle', '#ffd23f') + '<div><small>' + name + '</small><b>' + U.esc(cur.n.toUpperCase()) + '</b>' + UI.stars(cur.s) + '<span>' + what + '</span></div></div>' +
+          '<div class="spool">' + S.pool[r].map((c, i) => '<div class="cand"><b>' + U.esc(c.n) + '</b>' + UI.stars(c.s) + '<button class="btn sm ' + (c.s <= cur.s ? 'alt' : '') + '" data-r="' + r + '" data-i="' + i + '">HIRE<small>' + FO.staffCost(c.s) + ' CC</small></button></div>').join('') + (S.pool[r].length ? '' : '<p class="dim">New coaches show up next season.</p>') + '</div></div>';
+      };
+      h += '<div class="staffs">' + role('oc', 'OFFENSIVE COACH', 'Your team shoots better and scores more in sims.') + role('dc', 'DEFENSIVE COACH', 'The other team shoots worse against you.') + '</div>';
+    } else if (foView === 'earn') {
+      const rows = [['WIN A GAME', '+3'], ['LOSE A GAME', '+1'], ['HOME CROWD', 'FANS + ARENA'], ['HIGHLIGHTS (DUNKS, SPLASH 3S, BLOCKS)', 'UP TO +3'], ['PERFECT RELEASES (GREEN)', 'UP TO +2'], ['BLOWOUT WIN (15+)', '+1'], ['CLUTCH WIN (3 OR LESS)', '+1'], ['HOLD THEM UNDER 96', '+1'], ['30-POINT NIGHT', '+1'], ['WIN STREAK 3 / 5 / 8 / 12', '+2'], ['PLAYOFF WIN', '+4'], ['MAKE THE PLAYOFFS / WIN THE TITLE', '+6 / +20'], ['SOME DILEMMAS + SPONSORS', 'VARIES']];
+      h += '<div class="earn2"><div class="eh"><b>' + S.cc + '</b><span>COACH CREDITS TO SPEND</span><small>' + (S.ccLife || 0) + ' EARNED IN YOUR CAREER</small></div><div class="el">' + rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('') + '</div><p class="dim">Simmed games pay 60%. Long seasons pay less per game so it evens out. Spend CC on facilities, coaches, and training players (tap a player on your roster).</p></div>';
+    } else {
+      h += '<div class="sets">' +
+        '<div class="setrow">DIFFICULTY<div class="seg" id="sdif">' + ['ROOKIE', 'PRO', 'ALL-STAR', 'LEGEND'].map((n, i) => '<button data-v="' + i + '" class="' + (S.diff === i ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>' +
+        '<div class="setrow">GAME MODE<div class="seg" id="smode"><button data-v="full" class="' + (S.mode !== 'highlights' ? 'sel' : '') + '">FULL GAME</button><button data-v="highlights" class="' + (S.mode === 'highlights' ? 'sel' : '') + '">HIGHLIGHTS + SIMS</button></div></div>' +
+        (S.mode !== 'highlights' ? '<div class="setrow">QUARTER LENGTH<div class="seg" id="sqlen">' + QLENS.map(n => '<button data-v="' + n + '" class="' + ((S.qlen || 3) === n ? 'sel' : '') + '">' + n + ' MIN</button>').join('') + '</div></div>'
+          : '<div class="setrow">POSSESSIONS PER QUARTER<div class="seg" id="sppq">' + [2, 3, 4, 5].map(n => '<button data-v="' + n + '" class="' + (S.ppq === n ? 'sel' : '') + '">' + n + '</button>').join('') + '</div></div>') +
+        '<div class="setrow">TEAM LOGOS<div class="seg" id="slg"><button data-v="real" class="' + (S.logos !== 'retro' ? 'sel' : '') + '">REAL</button><button data-v="retro" class="' + (S.logos === 'retro' ? 'sel' : '') + '">RETRO LETTERS</button></div></div>' +
+        '<div class="setrow">SOUND<div class="seg" id="ssnd"><button data-v="1" class="' + (CK.SFX.on ? 'sel' : '') + '">ON</button><button data-v="0" class="' + (!CK.SFX.on ? 'sel' : '') + '">OFF</button></div></div>' +
+        '<div class="setbtns"><button class="btn alt sm" id="howb">HOW TO PLAY</button><button class="btn alt sm" id="quit">TITLE SCREEN</button></div>' +
+        '<p class="dim">Coach ' + U.esc(S.coach) + ' / career ' + S.totW + '-' + S.totL + ' / v' + CK.VER + ' / saves on this device</p></div>';
+    }
+    $('#tab').innerHTML = h;
+    click('.fov button', el => { foView = el.dataset.v; tabOffice(); });
+    click('.fac2 .btn', el => { const err = O.upgrade(el.dataset.k); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.hub('office'); UI.toast(FO.FAC[el.dataset.k].name + ' LEVEL ' + S.fac[el.dataset.k]); });
+    click('.cand .btn', el => { const err = FO.hire(el.dataset.r, +el.dataset.i); if (err) return UI.toast(err, true); CK.SFX.play('cheer'); L.save(); UI.hub('office'); UI.toast('Coach hired!'); });
     click('#sdif button', el => { S.diff = +el.dataset.v; L.save(); UI.hub('office'); });
     click('#sppq button', el => { S.ppq = +el.dataset.v; L.save(); UI.hub('office'); });
     click('#smode button', el => { S.mode = el.dataset.v; L.save(); UI.hub('office'); });

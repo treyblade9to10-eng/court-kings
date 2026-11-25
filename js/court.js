@@ -241,6 +241,7 @@
     e.aiRel = 0.86 + U.gauss() * (0.16 - e.pl.r.sht * 0.009); // AI release timing
     e.win = 0.035 + e.pl.r.sht * 0.0085 + (e.fire ? 0.05 : 0) - (d > 27 ? 0.02 : 0);
     if (isUser && st.cfg.diff === 0) e.win += 0.03;
+    if (isUser && st.cfg.film) e.win *= 1 + st.cfg.film * 0.06;   // Film Room upgrades
     fx('gather');
   }
   E.METER_T = 0.62;
@@ -251,6 +252,7 @@
     const ad = Math.abs(diffM);
     let q = U.clamp(1 - ad / (e.win * 3.2), 0, 1);
     const green = ad < e.win * 0.42;
+    if (green && e.userShot) st.hl.push('green');
     const d = dHoop(e), three = is3(e.x, e.y);
     const c = contest(e);
     let p = d < 10 ? 0.5 : d < 16 ? 0.44 : d < 22.5 ? 0.41 : 0.38;
@@ -260,6 +262,8 @@
     p *= 1 - c * 0.6;
     if (e.side === 0 && st.cfg.user === 'off') p *= [1.12, 1.04, 1, 0.94][st.cfg.diff];
     if (e.side === 0 && st.cfg.user === 'def') p *= st.aiMul.off;
+    if (e.side === 0 && st.cfg.user === 'off' && st.cfg.ocB) p *= 1 + st.cfg.ocB * 0.012;   // your coaching staff
+    if (e.side === 0 && st.cfg.user === 'def' && st.cfg.dcB) p *= 1 - st.cfg.dcB * 0.012;
     if (green) p = c > 0.75 ? 0.6 : d > 30 ? 0.7 : 0.97;
     const make = Math.random() < U.clamp(p, 0.02, 0.98);
     // block?

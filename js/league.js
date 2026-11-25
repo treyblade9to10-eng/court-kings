@@ -54,8 +54,8 @@
     return s * 0.78 + (b || s - 2) * 0.22;
   };
   L.teamStars = t => U.clamp(Math.round((1.5 + (L.teamOvr(t) - 5.3) * 2.7) * 2) / 2, 0.5, 5);
-  L.offRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.sht * 0.45 + p.r.ins * 0.3 + p.r.pas * 0.15 + p.r.ath * 0.1, 0) / 5; };
-  L.defRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.def * 0.65 + p.r.ath * 0.25 + (p.ht - 78) * 0.08, 0) / 5; };
+  L.offRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.sht * 0.45 + p.r.ins * 0.3 + p.r.pas * 0.15 + p.r.ath * 0.1, 0) / 5 + (t.id === CK.S.me && CK.FO ? CK.FO.ocB() * 0.15 : 0); };
+  L.defRating = t => { const { st } = L.lineup(t); return st.reduce((a, p) => a + p.r.def * 0.65 + p.r.ath * 0.25 + (p.ht - 78) * 0.08, 0) / 5 + (t.id === CK.S.me && CK.FO ? CK.FO.dcB() * 0.15 : 0); };
 
   // ---------- new league ----------
   L.newLeague = opts => {
@@ -117,7 +117,7 @@
       for (let k = 0; k < n / 2; k++) { const a = arr[k], b = arr[n - 1 - k]; games.push((r + k) % 2 ? [a, b] : [b, a]); }
       sch.push(games);
     }
-    S.schedule = sch; S.round = 0;
+    S.schedule = sch; S.round = 0; S.results = {};
     S.teams.forEach(t => { t.w = t.l = t.pf = t.pa = t.strk = 0; });
   };
   L.myGame = () => {
@@ -174,13 +174,7 @@
     if (record !== false) L.recordBox(box);
     return { hs, as, box };
   };
-  L.injuries = t => {
-    const med = t.id === CK.S.me ? CK.S.fac.med : 2;
-    L.roster(t).forEach(p => {
-      if (p.inj > 0) { p.inj--; return; }
-      if (U.chance(0.011)) { p.inj = Math.max(1, Math.round(U.irand(1, 7) * (1.25 - med * 0.12))); if (t.id === CK.S.me) L.inbox('Injury: ' + L.name(p), L.name(p) + ' is out ' + p.inj + ' game' + (p.inj > 1 ? 's' : '') + '. Better medical facilities speed up recovery.'); }
-    });
-  };
+  // L.injuries lives in front.js (injury types, medical center, injury report)
 
   // ---------- standings ----------
   L.pct = t => t.w + t.l ? t.w / (t.w + t.l) : 0;
@@ -242,7 +236,8 @@
   L.endSeason = () => { const S = CK.S; S.phase = 'awards'; CK.OFF && CK.OFF.seasonReview(); };
 
   // ---------- inbox / news ----------
-  L.inbox = (title, body, choices) => { CK.S.inbox.unshift({ id: U.uid(), title, body, choices: choices || null, read: false, season: CK.S.season, rnd: CK.S.round }); CK.S.inbox = CK.S.inbox.slice(0, 40); };
+  // kind: locker/media/office/inj/trade/good/bad (shown as a card right after your game), or empty for plain news
+  L.inbox = (title, body, choices, kind, extra) => { const m = { id: U.uid(), title, body, choices: choices || null, read: false, season: CK.S.season, rnd: CK.S.round, kind: kind || null, x: extra || null, fresh: !!kind }; CK.S.inbox.unshift(m); CK.S.inbox = CK.S.inbox.slice(0, 40); return m; };
   L.save = () => U.save('ck_save_v1', CK.S);
   L.load = () => { const s = U.load('ck_save_v1', null); if (s && s.v === 1) { CK.S = s; L.migrate(s); return true; } return false; };
   // v1 saves had made-up team names: attach real names/logos and scale salaries to the new cap
